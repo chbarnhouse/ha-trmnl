@@ -11,6 +11,7 @@ from homeassistant.const import CONF_API_KEY, CONF_NAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 import homeassistant.helpers.config_validation as cv
+from homeassistant import config_entries
 
 from .const import (
     CONF_DEVICE_ID,
@@ -51,6 +52,12 @@ PLATFORMS: list[Platform] = [
     Platform.LIGHT,
     Platform.CAMERA,
 ]
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up the TRMNL component."""
+    hass.data.setdefault(DOMAIN, {})
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

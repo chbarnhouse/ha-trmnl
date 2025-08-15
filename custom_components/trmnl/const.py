@@ -41,12 +41,16 @@ ATTR_FIRMWARE_VERSION = "firmware_version"
 ATTR_SCREEN_CONTENT = "screen_content"
 ATTR_BRIGHTNESS = "brightness"
 ATTR_PLUGIN_STATUS = "plugin_status"
+ATTR_WEBHOOK_URL = "webhook_url"
+ATTR_EVENTS = "events"
 
 # Service names
 SERVICE_UPDATE_SCREEN = "update_screen"
 SERVICE_INSTALL_PLUGIN = "install_plugin"
 SERVICE_UNINSTALL_PLUGIN = "uninstall_plugin"
 SERVICE_RESTART_DEVICE = "restart_device"
+SERVICE_SET_BRIGHTNESS = "set_brightness"
+SERVICE_SETUP_WEBHOOK = "setup_webhook"
 
 # Webhook events
 WEBHOOK_EVENT_DEVICE_UPDATE = "device_update"
