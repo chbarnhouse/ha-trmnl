@@ -3,6 +3,7 @@
 DOMAIN = "trmnl"
 
 # Configuration keys
+CONF_DEVICE_IP = "device_ip"
 CONF_API_KEY = "api_key"
 CONF_DEVICE_ID = "device_id"
 CONF_NAME = "name"
@@ -14,8 +15,10 @@ DEFAULT_UPDATE_INTERVAL = 30
 DEFAULT_WEBHOOK_PORT = 8123
 
 # API endpoints
-API_BASE_URL = "https://api.usetrmnl.com"
-API_VERSION = "v1"
+# TRMNL uses a local API on the device itself
+# The base URL should be the device's local IP address
+API_BASE_URL = "http://{device_ip}"  # Will be formatted with actual device IP
+API_ENDPOINT = "/api/display"
 
 # Device states
 DEVICE_STATE_ONLINE = "online"

@@ -12,6 +12,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
+    CONF_DEVICE_IP,
     CONF_DEVICE_ID,
     CONF_UPDATE_INTERVAL,
     CONF_WEBHOOK_PORT,
@@ -39,6 +40,7 @@ class TRMNLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 # Validate the connection
                 client = TRMNLClient(
+                    device_ip=user_input[CONF_DEVICE_IP],
                     api_key=user_input[CONF_API_KEY],
                     device_id=user_input[CONF_DEVICE_ID],
                     update_interval=user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
@@ -65,6 +67,7 @@ class TRMNLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
+                    vol.Required(CONF_DEVICE_IP): str,
                     vol.Required(CONF_API_KEY): str,
                     vol.Required(CONF_DEVICE_ID): str,
                     vol.Optional(CONF_NAME): str,

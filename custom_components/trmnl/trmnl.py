@@ -10,7 +10,7 @@ import async_timeout
 
 from .const import (
     API_BASE_URL,
-    API_VERSION,
+    API_ENDPOINT,
     CONNECTION_TIMEOUT,
     DEVICE_STATE_ERROR,
     DEVICE_STATE_OFFLINE,
@@ -26,12 +26,14 @@ class TRMNLClient:
 
     def __init__(
         self,
+        device_ip: str,
         api_key: str,
         device_id: str,
         update_interval: int = 30,
         webhook_port: int = 8123,
     ) -> None:
         """Initialize the TRMNL client."""
+        self.device_ip = device_ip
         self.api_key = api_key
         self.device_id = device_id
         self.update_interval = update_interval
@@ -76,10 +78,10 @@ class TRMNLClient:
         if not self.session:
             raise RuntimeError("Not connected to TRMNL API")
 
-        url = f"{API_BASE_URL}/{API_VERSION}/{endpoint}"
+        url = f"http://{self.device_ip}{endpoint}"
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
+            "ID": self.device_id,
+            "Access-Token": self.api_key,
         }
 
         try:
@@ -100,12 +102,12 @@ class TRMNLClient:
 
     async def async_get_device_info(self) -> Dict[str, Any]:
         """Get device information."""
-        endpoint = f"devices/{self.device_id}"
+        endpoint = API_ENDPOINT
         return await self._async_request("GET", endpoint)
 
     async def async_get_device_status(self) -> Dict[str, Any]:
         """Get current device status."""
-        endpoint = f"devices/{self.device_id}/status"
+        endpoint = API_ENDPOINT
         return await self._async_request("GET", endpoint)
 
     async def async_get_screens(self) -> List[Dict[str, Any]]:

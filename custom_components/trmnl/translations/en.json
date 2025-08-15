@@ -5,6 +5,7 @@
         "title": "TRMNL Configuration",
         "description": "Enter your TRMNL API credentials and device information.",
         "data": {
+          "device_ip": "Device IP Address",
           "api_key": "API Key",
           "device_id": "Device ID",
           "name": "Integration Name (Optional)",

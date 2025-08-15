@@ -14,6 +14,7 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant import config_entries
 
 from .const import (
+    CONF_DEVICE_IP,
     CONF_DEVICE_ID,
     CONF_UPDATE_INTERVAL,
     CONF_WEBHOOK_PORT,
@@ -31,6 +32,7 @@ CONFIG_SCHEMA = vol.Schema(
     {
         DOMAIN: vol.Schema(
             {
+                vol.Required(CONF_DEVICE_IP): cv.string,
                 vol.Required(CONF_API_KEY): cv.string,
                 vol.Required(CONF_DEVICE_ID): cv.string,
                 vol.Optional(CONF_NAME): cv.string,
@@ -66,6 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Create TRMNL client
     client = TRMNLClient(
+        device_ip=entry.data[CONF_DEVICE_IP],
         api_key=entry.data[CONF_API_KEY],
         device_id=entry.data[CONF_DEVICE_ID],
         update_interval=entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
