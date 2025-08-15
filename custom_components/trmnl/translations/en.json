@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "TRMNL Configuration",
+        "description": "Enter your TRMNL API credentials and device information.",
+        "data": {
+          "api_key": "API Key",
+          "device_id": "Device ID",
+          "name": "Integration Name (Optional)",
+          "update_interval": "Update Interval (seconds)",
+          "webhook_port": "Webhook Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to TRMNL API. Please check your API key and device ID.",
+      "invalid_auth": "Invalid authentication. Please check your API key.",
+      "invalid_device": "Invalid device ID. Please check your device ID."
+    },
+    "abort": {
+      "already_configured": "Device is already configured."
+    }
+  }
+}

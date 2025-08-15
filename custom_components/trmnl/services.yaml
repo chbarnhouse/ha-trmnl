@@ -1,0 +1,99 @@
+trmnl_update_screen:
+  name: "Update TRMNL Screen"
+  description: "Update the content of a TRMNL screen"
+  target:
+    entity:
+      integration: trmnl
+  fields:
+    screen_id:
+      name: "Screen ID"
+      description: "The ID of the screen to update"
+      required: true
+      example: "main_screen"
+    content:
+      name: "Content"
+      description: "The content to display on the screen"
+      required: true
+      example: "Hello World!"
+    template:
+      name: "Template"
+      description: "Whether the content is a template"
+      required: false
+      default: false
+      example: false
+
+trmnl_install_plugin:
+  name: "Install TRMNL Plugin"
+  description: "Install a plugin on a TRMNL device"
+  target:
+    entity:
+      integration: trmnl
+  fields:
+    plugin_id:
+      name: "Plugin ID"
+      description: "The ID of the plugin to install"
+      required: true
+      example: "weather_widget"
+    config:
+      name: "Configuration"
+      description: "Plugin configuration options"
+      required: false
+      example: '{"api_key": "your_key", "city": "London"}'
+
+trmnl_uninstall_plugin:
+  name: "Uninstall TRMNL Plugin"
+  description: "Remove a plugin from a TRMNL device"
+  target:
+    entity:
+      integration: trmnl
+  fields:
+    plugin_id:
+      name: "Plugin ID"
+      description: "The ID of the plugin to uninstall"
+      required: true
+      example: "weather_widget"
+
+trmnl_restart_device:
+  name: "Restart TRMNL Device"
+  description: "Restart a TRMNL device"
+  target:
+    entity:
+      integration: trmnl
+
+trmnl_set_brightness:
+  name: "Set TRMNL Brightness"
+  description: "Set the brightness of TRMNL screens"
+  target:
+    entity:
+      integration: trmnl
+  fields:
+    brightness:
+      name: "Brightness"
+      description: "Brightness level (0-100)"
+      required: true
+      example: 75
+      selector:
+        range:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+
+trmnl_setup_webhook:
+  name: "Setup TRMNL Webhook"
+  description: "Configure webhook for TRMNL device"
+  target:
+    entity:
+      integration: trmnl
+  fields:
+    webhook_url:
+      name: "Webhook URL"
+      description: "The webhook URL to receive updates"
+      required: true
+      example: "https://your-home-assistant.com/api/webhook/trmnl"
+    events:
+      name: "Events"
+      description: "Events to receive webhooks for"
+      required: false
+      default: ["device_update", "screen_update", "plugin_update"]
+      example: ["device_update", "screen_update"]

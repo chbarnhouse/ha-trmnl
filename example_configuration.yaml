@@ -1,0 +1,101 @@
+# Example configuration.yaml entry for TRMNL integration
+# This is optional - the integration can be configured through the UI
+
+# TRMNL Integration Configuration
+trmnl:
+  # Your TRMNL API key from https://docs.usetrmnl.com/go
+  api_key: "your_trmnl_api_key_here"
+  
+  # Your TRMNL device ID
+  device_id: "your_device_id_here"
+  
+  # Optional: Custom name for the integration
+  name: "My TRMNL Device"
+  
+  # Optional: How often to poll for updates (in seconds)
+  update_interval: 30
+  
+  # Optional: Port for receiving webhooks
+  webhook_port: 8123
+
+# Example automation using TRMNL services
+automation:
+  - alias: "Update TRMNL Screen on Motion"
+    trigger:
+      platform: state
+      entity_id: binary_sensor.motion_sensor
+      to: "on"
+    action:
+      service: trmnl.trmnl_update_screen
+      data:
+        screen_id: "main_screen"
+        content: "Motion Detected!"
+
+  - alias: "Set TRMNL Brightness at Night"
+    trigger:
+      platform: time
+      at: "22:00:00"
+    action:
+      service: trmnl.trmnl_set_brightness
+      data:
+        brightness: 20
+
+  - alias: "Restart TRMNL Device Weekly"
+    trigger:
+      platform: time
+      at: "02:00:00"
+      day_of_week: monday
+    action:
+      service: trmnl.trmnl_restart_device
+
+# Example script for plugin management
+script:
+  install_weather_plugin:
+    alias: "Install Weather Plugin"
+    sequence:
+      - service: trmnl.trmnl_install_plugin
+        data:
+          plugin_id: "weather_widget"
+          config: '{"api_key": "your_weather_api_key", "city": "London"}'
+
+  uninstall_plugin:
+    alias: "Uninstall Plugin"
+    sequence:
+      - service: trmnl.trmnl_uninstall_plugin
+        data:
+          plugin_id: "{{ plugin_id }}"
+
+# Example webhook setup
+script:
+  setup_webhook:
+    alias: "Setup TRMNL Webhook"
+    sequence:
+      - service: trmnl.trmnl_setup_webhook
+        data:
+          webhook_url: "https://your-home-assistant.com/api/webhook/trmnl"
+          events:
+            - "device_update"
+            - "screen_update"
+            - "plugin_update"
+
+# Example sensor configuration for custom displays
+sensor:
+  - platform: template
+    sensors:
+      trmnl_status_display:
+        friendly_name: "TRMNL Status Display"
+        value_template: >
+          {% if is_state('binary_sensor.trmnl_device_online', 'on') %}
+            Online - {{ states('sensor.trmnl_device_status') }}
+          {% else %}
+            Offline
+          {% endif %}
+
+# Example dashboard configuration
+# Add this to your dashboard configuration to display TRMNL information
+# You can use the entities created by the integration:
+# - sensor.trmnl_device_status
+# - binary_sensor.trmnl_device_online
+# - sensor.trmnl_screen_main_screen
+# - light.trmnl_screen_main_screen_light
+# - switch.trmnl_device_restart
