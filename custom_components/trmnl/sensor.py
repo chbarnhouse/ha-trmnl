@@ -90,15 +90,28 @@ class TRMNLSensorBase(SensorEntity):
         # Try multiple common field names for device model
         model_fields = [
             'model',
-            'device_model',
+            'device_model', 
             'product_model',
             'hardware_model',
-            'type'
+            'device_type',
+            'product_type',
+            'type',
+            'variant',
+            'sku',
+            'part_number'
         ]
+        
+        # Log all available device fields for debugging
+        _LOGGER.debug("Available device fields for model detection: %s", list(self._device.keys()))
         
         for field in model_fields:
             if field in self._device and self._device[field]:
-                return str(self._device[field])
+                model_value = str(self._device[field])
+                _LOGGER.debug("Found device model in field '%s': %s", field, model_value)
+                return model_value
+        
+        # Log that no model was found
+        _LOGGER.warning("No device model found in device data, using fallback")
         
         # Fallback to a generic model name
         return "TRMNL Device"
