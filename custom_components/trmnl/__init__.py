@@ -22,6 +22,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     _LOGGER.info("Setting up TRMNL: %s:%s", host, port)
     
+    # Update entry title if using old format
+    expected_title = f"Terminus Server ({host}:{port})"
+    if entry.title != expected_title:
+        _LOGGER.info("Updating entry title from '%s' to '%s'", entry.title, expected_title)
+        hass.config_entries.async_update_entry(entry, title=expected_title)
+    
     api = TRMNLApi(host, port)
     
     # Test connection and discover devices

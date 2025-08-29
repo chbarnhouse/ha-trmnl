@@ -27,7 +27,7 @@ async def validate_connection(hass: HomeAssistant, host: str, port: int) -> dict
         _LOGGER.info("Found %d TRMNL devices", len(devices))
         
         return {
-            "title": f"Terminus ({host}:{port})",
+            "title": f"Terminus Server ({host}:{port})",
             "devices": devices,
             "host": host,
             "port": port
