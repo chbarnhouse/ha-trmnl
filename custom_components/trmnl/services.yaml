@@ -1,0 +1,186 @@
+create_dashboard_screen:
+  name: Create Dashboard Screen
+  description: Create a TRMNL screen from a Home Assistant dashboard
+  fields:
+    device:
+      name: TRMNL Device
+      description: Select your TRMNL device
+      required: true
+      selector:
+        device:
+          integration: trmnl
+    dashboard_url:
+      name: Dashboard URL
+      description: Home Assistant dashboard path (e.g., "/lovelace/home")
+      required: true
+      example: "/lovelace/home"
+      selector:
+        text:
+    screen_name:
+      name: Screen Name
+      description: Optional name for the screen
+      required: false
+      example: "Home Dashboard"
+      selector:
+        text:
+    margins:
+      name: Margins
+      description: Margins around the content in pixels
+      required: false
+      selector:
+        object:
+      default:
+        top: 20
+        right: 20
+        bottom: 20
+        left: 20
+    alignment:
+      name: Alignment
+      description: Content alignment on the screen
+      required: false
+      default: "center"
+      selector:
+        select:
+          options:
+            - "left"
+            - "center"
+            - "right"
+    zoom:
+      name: Zoom Level
+      description: Scale factor for the dashboard (0.1 to 3.0)
+      required: false
+      default: 1.0
+      selector:
+        number:
+          min: 0.1
+          max: 3.0
+          step: 0.1
+    wait_time:
+      name: Wait Time
+      description: Time to wait before taking screenshot (milliseconds)
+      required: false
+      default: 2000
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 500
+    selector:
+      name: CSS Selector
+      description: Optional CSS selector to screenshot specific element
+      required: false
+      example: ".panel-view"
+      selector:
+        text:
+    orientation:
+      name: Screen Orientation
+      description: Display orientation for the screen
+      required: false
+      default: "landscape"
+      selector:
+        select:
+          options:
+            - "landscape"
+            - "landscape_inverted"
+            - "portrait"
+            - "portrait_inverted"
+
+update_dashboard_screen:
+  name: Update Dashboard Screen
+  description: Update an existing TRMNL screen with new dashboard content
+  fields:
+    screen_id:
+      name: Screen ID
+      description: ID of the screen to update
+      required: true
+      example: 123
+      selector:
+        number:
+          min: 1
+    dashboard_url:
+      name: Dashboard URL
+      description: Home Assistant dashboard path
+      required: true
+      example: "/lovelace/updated"
+      selector:
+        text:
+    margins:
+      name: Margins
+      description: Margins around the content in pixels
+      required: false
+      selector:
+        object:
+      default:
+        top: 20
+        right: 20
+        bottom: 20
+        left: 20
+    alignment:
+      name: Alignment
+      description: Content alignment on the screen
+      required: false
+      default: "center"
+      selector:
+        select:
+          options:
+            - "left"
+            - "center"
+            - "right"
+    zoom:
+      name: Zoom Level
+      description: Scale factor for the dashboard
+      required: false
+      default: 1.0
+      selector:
+        number:
+          min: 0.1
+          max: 3.0
+          step: 0.1
+    wait_time:
+      name: Wait Time
+      description: Time to wait before taking screenshot (milliseconds)
+      required: false
+      default: 2000
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 500
+    selector:
+      name: CSS Selector
+      description: Optional CSS selector to screenshot specific element
+      required: false
+      selector:
+        text:
+
+create_dashboard_collection:
+  name: Create Dashboard Collection
+  description: Create multiple TRMNL screens from different dashboards
+  fields:
+    device:
+      name: TRMNL Device
+      description: Select your TRMNL device
+      required: true
+      selector:
+        device:
+          integration: trmnl
+    dashboards:
+      name: Dashboards
+      description: List of dashboards to create screens from
+      required: true
+      selector:
+        object:
+      example:
+        - url: "/lovelace/home"
+          name: "Home Dashboard"
+          zoom: 0.8
+        - url: "/lovelace/energy"
+          name: "Energy Dashboard"
+          alignment: "left"
+    create_playlist:
+      name: Create Playlist
+      description: Whether to create a playlist from the screens
+      required: false
+      default: true
+      selector:
+        boolean:

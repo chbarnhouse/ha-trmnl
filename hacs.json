@@ -1,0 +1,13 @@
+{
+  "name": "TRMNL",
+  "hacs": "1.6.0",
+  "domains": ["trmnl"],
+  "iot_class": "Local Polling",
+  "homeassistant": "2023.1.0",
+  "documentation": "https://github.com/chbarnhouse/ha-trmnl",
+  "issue_tracker": "https://github.com/chbarnhouse/ha-trmnl/issues",
+  "codeowners": ["@chbarnhouse"],
+  "requirements": ["aiohttp>=3.8.0", "pillow>=9.0.0"],
+  "config_flow": true,
+  "after_dependencies": []
+}

@@ -1,0 +1,11 @@
+{
+  "domain": "trmnl",
+  "name": "TRMNL",
+  "version": "1.0.0",
+  "documentation": "https://github.com/chbarnhouse/ha-trmnl",
+  "dependencies": [],
+  "codeowners": ["@chbarnhouse"],
+  "requirements": ["aiohttp"],
+  "config_flow": true,
+  "iot_class": "local_polling"
+}

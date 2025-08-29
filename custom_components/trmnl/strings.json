@@ -1,0 +1,33 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up TRMNL integration",
+        "description": "Enter your TRMNL API credentials and device information",
+        "data": {
+          "api_token": "API Token",
+          "device_id": "Device ID",
+          "base_url": "Base URL"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to TRMNL API",
+      "invalid_auth": "Invalid API token",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "TRMNL Options",
+        "data": {
+          "scan_interval": "Scan interval (seconds)"
+        }
+      }
+    }
+  }
+}
