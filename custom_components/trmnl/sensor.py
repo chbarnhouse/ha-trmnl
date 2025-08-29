@@ -55,9 +55,9 @@ class TRMNLSensorBase(SensorEntity):
         """Return device information."""
         return DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
-            name=f"E-Paper Display ({self._device.get('label', self._device_id)})",
+            name=f"{self._get_device_model()} ({self._device.get('label', self._device_id)})",
             manufacturer="TRMNL",
-            model="E-Paper Display",
+            model=self._get_device_model(),
             sw_version=self._get_firmware_version(),
         )
     
@@ -84,6 +84,24 @@ class TRMNLSensorBase(SensorEntity):
         
         # If no firmware version found, return a descriptive fallback
         return f"TRMNL v{self._device.get('id', 'Unknown')}"
+    
+    def _get_device_model(self) -> str:
+        """Get device model from device data with fallbacks."""
+        # Try multiple common field names for device model
+        model_fields = [
+            'model',
+            'device_model',
+            'product_model',
+            'hardware_model',
+            'type'
+        ]
+        
+        for field in model_fields:
+            if field in self._device and self._device[field]:
+                return str(self._device[field])
+        
+        # Fallback to a generic model name
+        return "TRMNL Device"
 
 
 class TRMNLBatterySensor(TRMNLSensorBase):
