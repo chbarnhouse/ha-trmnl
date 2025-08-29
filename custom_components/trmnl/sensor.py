@@ -55,7 +55,7 @@ class TRMNLSensorBase(SensorEntity):
         """Return device information."""
         return DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
-            name=f"TRMNL {self._device.get('label', self._device_id)}",
+            name=self._device.get('label', self._device_id),
             manufacturer="TRMNL",
             model="E-Paper Display",
             sw_version=self._get_firmware_version(),
