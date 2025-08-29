@@ -58,13 +58,32 @@ class TRMNLSensorBase(SensorEntity):
             name=f"TRMNL {self._device.get('label', self._device_id)}",
             manufacturer="TRMNL",
             model="E-Paper Display",
-            sw_version=self._device.get('firmware', self._device.get('fw_version', 'Unknown')),
+            sw_version=self._get_firmware_version(),
         )
     
     @property
     def available(self) -> bool:
         """Return if entity is available."""
         return True
+    
+    def _get_firmware_version(self) -> str:
+        """Get firmware version from device data with fallbacks."""
+        # Try multiple common field names for firmware version
+        version_fields = [
+            'firmware',
+            'fw_version', 
+            'version',
+            'software_version',
+            'sw_version',
+            'firmware_version'
+        ]
+        
+        for field in version_fields:
+            if field in self._device and self._device[field]:
+                return str(self._device[field])
+        
+        # If no firmware version found, return a descriptive fallback
+        return f"TRMNL v{self._device.get('id', 'Unknown')}"
 
 
 class TRMNLBatterySensor(TRMNLSensorBase):

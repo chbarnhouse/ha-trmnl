@@ -38,6 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info("Device: %s (%s) - Battery: %sV, WiFi: %s dBm", 
                         device.get('friendly_id'), device.get('label'), 
                         device.get('battery'), device.get('wifi'))
+            _LOGGER.debug("Full device data: %s", device)
         
     except Exception as e:
         _LOGGER.error("Failed to setup TRMNL connection: %s", e)
