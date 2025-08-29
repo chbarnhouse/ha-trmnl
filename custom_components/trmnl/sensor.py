@@ -58,7 +58,7 @@ class TRMNLSensorBase(SensorEntity):
             name=f"TRMNL {self._device.get('label', self._device_id)}",
             manufacturer="TRMNL",
             model="E-Paper Display",
-            sw_version="1.0.0",
+            sw_version=self._device.get('firmware', self._device.get('fw_version', 'Unknown')),
         )
     
     @property
