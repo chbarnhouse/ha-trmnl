@@ -102,7 +102,7 @@ class TRMNLSensorBase(SensorEntity):
         ]
         
         # Log all available device fields for debugging
-        _LOGGER.debug("Available device fields for model detection: %s", list(self._device.keys()))
+        _LOGGER.info("Available device fields for model detection: %s", list(self._device.keys()))
         
         for field in model_fields:
             if field in self._device and self._device[field]:
