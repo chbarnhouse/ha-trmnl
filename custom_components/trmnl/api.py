@@ -77,6 +77,10 @@ class TRMNLApi:
         if result and "data" in result:
             devices = result["data"]
             _LOGGER.info("Found %d TRMNL devices", len(devices))
+            # Log each device's available fields for model detection debugging
+            for i, device in enumerate(devices):
+                _LOGGER.info("Device %d available fields: %s", i, list(device.keys()))
+                _LOGGER.info("Device %d full data: %s", i, device)
             return devices
         else:
             _LOGGER.error("No devices found or API error")
