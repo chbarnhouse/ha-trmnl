@@ -109,9 +109,9 @@ class TRMNLApi:
             models = result["data"]
             _LOGGER.info("Found %d TRMNL models", len(models))
             for model in models:
-                # Map model ID to model name/description
+                # Map model ID to model display name (prefer label, then description, then name)
                 model_id = str(model.get('id', ''))
-                model_name = model.get('name', model.get('model', model.get('description', f'Model {model_id}')))
+                model_name = model.get('label', model.get('description', model.get('name', f'Model {model_id}')))
                 if model_id:
                     models_map[model_id] = model_name
                     _LOGGER.info("Model mapping: ID %s -> Name '%s'", model_id, model_name)
