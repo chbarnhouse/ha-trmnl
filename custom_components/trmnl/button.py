@@ -105,7 +105,17 @@ class TRMNLRefreshButton(TRMNLButtonBase):
     
     async def async_press(self) -> None:
         """Press the refresh button."""
-        _LOGGER.info("Refreshing device %s via button press", self._device_id)
-        success = await self._api.refresh_device(self._device_id)
-        if not success:
-            _LOGGER.error("Failed to refresh device %s", self._device_id)
+        try:
+            _LOGGER.error("BUTTON PRESSED! Refreshing device %s via button press", self._device_id)
+            print(f"TRMNL DEBUG: Button pressed for device {self._device_id}")
+            success = await self._api.refresh_device(self._device_id)
+            if success:
+                _LOGGER.error("BUTTON SUCCESS! Device %s refresh completed successfully", self._device_id)
+                print(f"TRMNL DEBUG: Refresh successful for {self._device_id}")
+            else:
+                _LOGGER.error("BUTTON FAILED! Device %s refresh failed", self._device_id)
+                print(f"TRMNL DEBUG: Refresh failed for {self._device_id}")
+        except Exception as e:
+            _LOGGER.error("BUTTON EXCEPTION! Error in async_press for device %s: %s", self._device_id, e)
+            print(f"TRMNL DEBUG: Exception in button press: {e}")
+            raise
