@@ -99,6 +99,27 @@ class TRMNLApi:
             _LOGGER.error("No screens found or API error")
             return []
             
+    async def get_models(self) -> Dict[str, str]:
+        """Get all models from Terminus and return as ID->name mapping."""
+        _LOGGER.debug("Fetching models from %s", self.base_url)
+        result = await self._make_request("/api/models")
+        
+        models_map = {}
+        if result and "data" in result:
+            models = result["data"]
+            _LOGGER.info("Found %d TRMNL models", len(models))
+            for model in models:
+                # Map model ID to model name/description
+                model_id = str(model.get('id', ''))
+                model_name = model.get('name', model.get('model', model.get('description', f'Model {model_id}')))
+                if model_id:
+                    models_map[model_id] = model_name
+                    _LOGGER.info("Model mapping: ID %s -> Name '%s'", model_id, model_name)
+        else:
+            _LOGGER.warning("No models found or API error")
+            
+        return models_map
+            
     async def test_connection(self) -> bool:
         """Test connection to Terminus server."""
         try:

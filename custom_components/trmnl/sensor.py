@@ -28,13 +28,14 @@ async def async_setup_entry(
     entry_data = hass.data[DOMAIN][config_entry.entry_id]
     api = entry_data["api"]
     devices = entry_data["devices"]
+    models = entry_data.get("models", {})
     
     sensors = []
     for device in devices:
         device_id = device.get('friendly_id', str(device.get('id')))
         sensors.extend([
-            TRMNLBatterySensor(api, device, device_id),
-            TRMNLWiFiSensor(api, device, device_id),
+            TRMNLBatterySensor(api, device, device_id, models),
+            TRMNLWiFiSensor(api, device, device_id, models),
         ])
     
     async_add_entities(sensors)
@@ -43,11 +44,12 @@ async def async_setup_entry(
 class TRMNLSensorBase(SensorEntity):
     """Base class for TRMNL sensors."""
     
-    def __init__(self, api: TRMNLApi, device: dict, device_id: str) -> None:
+    def __init__(self, api: TRMNLApi, device: dict, device_id: str, models: dict = None) -> None:
         """Initialize the sensor."""
         self._api = api
         self._device = device
         self._device_id = device_id
+        self._models = models or {}
         self._attr_has_entity_name = True
     
     @property
@@ -96,11 +98,18 @@ class TRMNLSensorBase(SensorEntity):
         # Log all available device fields for debugging
         _LOGGER.info("Available device fields for model detection: %s", list(self._device.keys()))
         
-        # First try model_id if it exists and looks like a model name (not just a number)
+        # First try to resolve model_id using the models mapping
         if 'model_id' in self._device and self._device['model_id']:
             model_id = str(self._device['model_id'])
             _LOGGER.info("Found model_id: %s", model_id)
-            # If model_id looks like it contains useful info, use it
+            
+            # Try to resolve model_id to actual model name using models mapping
+            if model_id in self._models:
+                model_name = self._models[model_id]
+                _LOGGER.info("Resolved model_id %s to model name: %s", model_id, model_name)
+                return model_name
+            
+            # If model_id looks like it contains useful info directly, use it
             if not model_id.isdigit():  # Not just a numeric ID
                 return model_id
         
@@ -140,9 +149,9 @@ class TRMNLSensorBase(SensorEntity):
 class TRMNLBatterySensor(TRMNLSensorBase):
     """TRMNL battery sensor."""
     
-    def __init__(self, api: TRMNLApi, device: dict, device_id: str) -> None:
+    def __init__(self, api: TRMNLApi, device: dict, device_id: str, models: dict = None) -> None:
         """Initialize the battery sensor."""
-        super().__init__(api, device, device_id)
+        super().__init__(api, device, device_id, models)
         self._attr_name = "Battery"
         self._attr_unique_id = f"{device_id}_battery"
         self._attr_device_class = SensorDeviceClass.VOLTAGE
@@ -176,9 +185,9 @@ class TRMNLBatterySensor(TRMNLSensorBase):
 class TRMNLWiFiSensor(TRMNLSensorBase):
     """TRMNL WiFi signal sensor."""
     
-    def __init__(self, api: TRMNLApi, device: dict, device_id: str) -> None:
+    def __init__(self, api: TRMNLApi, device: dict, device_id: str, models: dict = None) -> None:
         """Initialize the WiFi sensor."""
-        super().__init__(api, device, device_id)
+        super().__init__(api, device, device_id, models)
         self._attr_name = "WiFi Signal"
         self._attr_unique_id = f"{device_id}_wifi"
         self._attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH

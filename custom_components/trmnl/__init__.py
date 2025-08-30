@@ -39,6 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         devices = await api.get_devices()
         _LOGGER.info("Found %d TRMNL devices", len(devices))
         
+        # Get model mappings to resolve model_id to actual model names
+        models = await api.get_models()
+        _LOGGER.info("Loaded %d TRMNL model mappings", len(models))
+        
         # Log device details
         for device in devices:
             _LOGGER.info("Device: %s (%s) - Battery: %sV, WiFi: %s dBm", 
@@ -58,6 +62,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "host": host,
         "port": port,
         "devices": devices,
+        "models": models,
     }
     
     # Register services
