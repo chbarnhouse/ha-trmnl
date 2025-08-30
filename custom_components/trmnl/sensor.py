@@ -68,14 +68,17 @@ class TRMNLSensorBase(SensorEntity):
     
     def _get_firmware_version(self) -> str:
         """Get firmware version from device data with fallbacks."""
-        # Try multiple common field names for firmware version
+        # Based on BYOS documentation, firmware_version is the correct field
+        if 'firmware_version' in self._device and self._device['firmware_version']:
+            return str(self._device['firmware_version'])
+        
+        # Try other fallback field names
         version_fields = [
             'firmware',
             'fw_version', 
             'version',
             'software_version',
-            'sw_version',
-            'firmware_version'
+            'sw_version'
         ]
         
         for field in version_fields:
@@ -87,7 +90,21 @@ class TRMNLSensorBase(SensorEntity):
     
     def _get_device_model(self) -> str:
         """Get device model from device data with fallbacks."""
-        # Try multiple common field names for device model
+        # Based on BYOS documentation, model information might be in model_id
+        # But model_id is likely a reference that needs to be resolved to actual model name
+        
+        # Log all available device fields for debugging
+        _LOGGER.info("Available device fields for model detection: %s", list(self._device.keys()))
+        
+        # First try model_id if it exists and looks like a model name (not just a number)
+        if 'model_id' in self._device and self._device['model_id']:
+            model_id = str(self._device['model_id'])
+            _LOGGER.info("Found model_id: %s", model_id)
+            # If model_id looks like it contains useful info, use it
+            if not model_id.isdigit():  # Not just a numeric ID
+                return model_id
+        
+        # Try other potential model field names
         model_fields = [
             'model',
             'device_model', 
@@ -101,14 +118,17 @@ class TRMNLSensorBase(SensorEntity):
             'part_number'
         ]
         
-        # Log all available device fields for debugging
-        _LOGGER.info("Available device fields for model detection: %s", list(self._device.keys()))
-        
         for field in model_fields:
             if field in self._device and self._device[field]:
                 model_value = str(self._device[field])
-                _LOGGER.debug("Found device model in field '%s': %s", field, model_value)
+                _LOGGER.info("Found device model in field '%s': %s", field, model_value)
                 return model_value
+        
+        # If model_id was numeric, use it with TRMNL prefix
+        if 'model_id' in self._device and self._device['model_id']:
+            model_id = str(self._device['model_id'])
+            _LOGGER.info("Using numeric model_id as fallback: %s", model_id)
+            return f"TRMNL Model {model_id}"
         
         # Log that no model was found
         _LOGGER.warning("No device model found in device data, using fallback")
