@@ -260,11 +260,11 @@ class TRMNLApi:
         return await self.update_device(device_id, {"firmware_update": enable})
 
     async def refresh_device(self, device_id: str) -> bool:
-        """Trigger a device refresh by updating its data."""
+        """Trigger a device refresh using proper TRMNL mechanisms."""
         try:
             _LOGGER.info("Refreshing device: %s", device_id)
             
-            # Get all devices to find the target device
+            # Find the device data
             devices = await self.get_devices()
             device_data = None
             numeric_id = None
@@ -279,17 +279,57 @@ class TRMNLApi:
                 _LOGGER.error("Device %s not found", device_id)
                 return False
             
-            # Update device with same data to trigger refresh
-            url = f"/api/devices/{numeric_id}"
-            payload = {"device": device_data}
+            # Method 1: Call the display API as the device would
+            # This ensures the latest content is processed and available
+            display_result = await self.get_device_display(device_id)
+            if display_result:
+                _LOGGER.info("Retrieved current display content for device %s", device_id)
+                
+                # Log what content is available
+                if 'image_url' in display_result:
+                    _LOGGER.info("Device %s has image URL: %s", device_id, display_result['image_url'])
+                if 'refresh_rate' in display_result:
+                    _LOGGER.info("Device %s refresh rate: %s", device_id, display_result['refresh_rate'])
             
-            result = await self._make_request(url, method="PATCH", data=payload)
+            # Method 2: Force the device to check for updates by setting a very short refresh rate
+            # then immediately restoring it. This causes the device to wake up and poll immediately.
+            original_refresh_rate = device_data.get('refresh_rate', 3600)
             
-            if result:
-                _LOGGER.info("Successfully refreshed device %s", device_id)
-                return True
+            # Set to 30 seconds to force immediate polling
+            _LOGGER.info("Setting temporary 30-second refresh rate to force device %s to poll immediately", device_id)
+            fast_refresh_result = await self._make_request(
+                f"/api/devices/{numeric_id}", 
+                method="PATCH", 
+                data={"device": {"refresh_rate": 30}}
+            )
+            
+            if fast_refresh_result:
+                _LOGGER.info("Device %s should now poll within 30 seconds. Restoring original refresh rate...", device_id)
+                
+                # Wait a moment, then restore original rate
+                import asyncio
+                await asyncio.sleep(2)  # Give it a moment to register the change
+                
+                restore_result = await self._make_request(
+                    f"/api/devices/{numeric_id}", 
+                    method="PATCH", 
+                    data={"device": {"refresh_rate": original_refresh_rate}}
+                )
+                
+                if restore_result:
+                    _LOGGER.info("Successfully triggered refresh for device %s and restored refresh rate", device_id)
+                    return True
+                else:
+                    _LOGGER.warning("Triggered refresh for device %s but failed to restore refresh rate", device_id)
+                    # Try once more to restore it
+                    await self._make_request(
+                        f"/api/devices/{numeric_id}", 
+                        method="PATCH", 
+                        data={"device": {"refresh_rate": original_refresh_rate}}
+                    )
+                    return True  # Still consider refresh successful
             else:
-                _LOGGER.error("Failed to refresh device %s", device_id)
+                _LOGGER.error("Failed to set fast refresh rate for device %s", device_id)
                 return False
                 
         except Exception as e:
@@ -400,13 +440,35 @@ class TRMNLApi:
 
     # Display and Content Management
     async def get_device_display(self, device_id: str) -> Optional[Dict]:
-        """Get the current display content for a device."""
+        """Get the current display content for a device using its MAC address."""
         try:
-            result = await self._make_request(f"/api/display/{device_id}")
-            if result:
-                _LOGGER.debug("Retrieved display content for device %s", device_id)
-                return result
-            return None
+            # Find device to get MAC address
+            devices = await self.get_devices()
+            mac_address = None
+            
+            for device in devices:
+                if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
+                    mac_address = device.get('mac_address')
+                    break
+            
+            if not mac_address:
+                _LOGGER.error("Could not find MAC address for device %s", device_id)
+                return None
+            
+            # Make request with MAC address as ID header (as per TRMNL API spec)
+            session = await self._get_session()
+            headers = {
+                'ID': mac_address,
+                'Content-Type': 'application/json'
+            }
+            
+            async with session.get(f"{self.base_url}/api/display", headers=headers) as response:
+                result = await self._handle_response(response, f"{self.base_url}/api/display")
+                if result:
+                    _LOGGER.debug("Retrieved display content for device %s (MAC: %s)", device_id, mac_address)
+                    return result
+                return None
+                
         except Exception as e:
             _LOGGER.error("Error getting display for device %s: %s", device_id, e)
             return None
