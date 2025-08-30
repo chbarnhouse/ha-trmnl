@@ -3,7 +3,7 @@
 DOMAIN = "trmnl"
 
 # Platforms
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "switch", "button", "number", "time"]
 
 # Configuration
 CONF_HOST = "host"
@@ -13,6 +13,4 @@ CONF_PORT = "port"
 DEFAULT_PORT = 2300
 DEFAULT_NAME = "TRMNL"
 
-# Services
-SERVICE_UPDATE_SCREEN = "update_screen"
-SERVICE_REFRESH_DEVICE = "refresh_device"
+# Services are now handled in services.py

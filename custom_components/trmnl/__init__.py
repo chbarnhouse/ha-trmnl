@@ -4,8 +4,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, PLATFORMS, CONF_HOST, CONF_PORT, SERVICE_UPDATE_SCREEN, SERVICE_REFRESH_DEVICE
+from .const import DOMAIN, PLATFORMS, CONF_HOST, CONF_PORT
 from .api import TRMNLApi
+from .services import async_setup_services, async_unload_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
     
     # Register services
-    await _register_services(hass, entry)
+    await async_setup_services(hass)
     
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -75,49 +76,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _register_services(hass: HomeAssistant, entry: ConfigEntry):
-    """Register TRMNL services."""
-    
-    async def update_screen_service(call: ServiceCall):
-        """Handle update screen service call."""
-        device_id = call.data.get("device")
-        screen_id = call.data.get("screen_id")
-        
-        _LOGGER.info("Update screen service called: device=%s, screen=%s", device_id, screen_id)
-        
-        # Find the API instance for this device
-        api = hass.data[DOMAIN][entry.entry_id]["api"]
-        
-        # For now, just log the request since screen updates are complex
-        _LOGGER.info("Screen update requested but not yet implemented")
-        
-    async def refresh_device_service(call: ServiceCall):
-        """Handle refresh device service call."""
-        device_id = call.data.get("device")
-        
-        _LOGGER.info("Refresh device service called: device=%s", device_id)
-        
-        api = hass.data[DOMAIN][entry.entry_id]["api"]
-        
-        try:
-            success = await api.refresh_device(device_id)
-            if success:
-                _LOGGER.info("Successfully refreshed device %s", device_id)
-            else:
-                _LOGGER.error("Failed to refresh device %s", device_id)
-        except Exception as e:
-            _LOGGER.error("Error refreshing device %s: %s", device_id, e)
-    
-    # Register services
-    hass.services.async_register(DOMAIN, SERVICE_UPDATE_SCREEN, update_screen_service)
-    hass.services.async_register(DOMAIN, SERVICE_REFRESH_DEVICE, refresh_device_service)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     # Remove services
-    hass.services.async_remove(DOMAIN, SERVICE_UPDATE_SCREEN)
-    hass.services.async_remove(DOMAIN, SERVICE_REFRESH_DEVICE)
+    await async_unload_services(hass)
     
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

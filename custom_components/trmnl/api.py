@@ -41,8 +41,14 @@ class TRMNLApi:
             if method.upper() == "GET":
                 async with session.get(url) as response:
                     return await self._handle_response(response, url)
-            elif method.upper() == "PATCH" and data:
+            elif method.upper() == "POST":
+                async with session.post(url, json=data) as response:
+                    return await self._handle_response(response, url)
+            elif method.upper() == "PATCH":
                 async with session.patch(url, json=data) as response:
+                    return await self._handle_response(response, url)
+            elif method.upper() == "DELETE":
+                async with session.delete(url) as response:
                     return await self._handle_response(response, url)
             else:
                 _LOGGER.error("Unsupported HTTP method: %s", method)
@@ -57,8 +63,11 @@ class TRMNLApi:
             
     async def _handle_response(self, response, url: str) -> Optional[Dict]:
         """Handle HTTP response."""
-        if response.status == 200:
+        if response.status in [200, 201, 204]:
             try:
+                # Handle empty responses for DELETE operations
+                if response.status == 204:
+                    return {"status": "ok"}
                 data = await response.json()
                 _LOGGER.debug("Request successful to %s", url)
                 return data
@@ -145,6 +154,111 @@ class TRMNLApi:
             _LOGGER.warning("Connection failed to %s:%s - %s", self.host, self.port, e)
             return False
 
+    # Device Management Methods
+    async def create_device(self, device_data: Dict) -> Optional[Dict]:
+        """Create a new device in Terminus."""
+        try:
+            _LOGGER.info("Creating device: %s", device_data.get('friendly_id', 'unknown'))
+            result = await self._make_request("/api/devices", method="POST", data={"device": device_data})
+            if result:
+                _LOGGER.info("Successfully created device")
+                return result.get("data")
+            return None
+        except Exception as e:
+            _LOGGER.error("Error creating device: %s", e)
+            return None
+
+    async def update_device(self, device_id: str, updates: Dict) -> bool:
+        """Update device configuration."""
+        try:
+            _LOGGER.info("Updating device %s with: %s", device_id, updates)
+            
+            devices = await self.get_devices()
+            numeric_id = None
+            
+            for device in devices:
+                if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
+                    numeric_id = device.get('id')
+                    break
+            
+            if not numeric_id:
+                _LOGGER.error("Device %s not found", device_id)
+                return False
+            
+            result = await self._make_request(f"/api/devices/{numeric_id}", method="PATCH", data={"device": updates})
+            
+            if result:
+                _LOGGER.info("Successfully updated device %s", device_id)
+                return True
+            return False
+                
+        except Exception as e:
+            _LOGGER.error("Error updating device %s: %s", device_id, e)
+            return False
+
+    async def delete_device(self, device_id: str) -> bool:
+        """Delete a device from Terminus."""
+        try:
+            _LOGGER.info("Deleting device: %s", device_id)
+            
+            devices = await self.get_devices()
+            numeric_id = None
+            
+            for device in devices:
+                if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
+                    numeric_id = device.get('id')
+                    break
+            
+            if not numeric_id:
+                _LOGGER.error("Device %s not found", device_id)
+                return False
+            
+            result = await self._make_request(f"/api/devices/{numeric_id}", method="DELETE")
+            
+            if result:
+                _LOGGER.info("Successfully deleted device %s", device_id)
+                return True
+            return False
+                
+        except Exception as e:
+            _LOGGER.error("Error deleting device %s: %s", device_id, e)
+            return False
+
+    async def get_device(self, device_id: str) -> Optional[Dict]:
+        """Get a specific device by ID."""
+        try:
+            devices = await self.get_devices()
+            
+            for device in devices:
+                if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
+                    return device
+            
+            _LOGGER.error("Device %s not found", device_id)
+            return None
+                
+        except Exception as e:
+            _LOGGER.error("Error getting device %s: %s", device_id, e)
+            return None
+
+    async def set_device_sleep_schedule(self, device_id: str, sleep_start: str, sleep_stop: str) -> bool:
+        """Set device sleep schedule (format: HH:MM)."""
+        return await self.update_device(device_id, {
+            "sleep_start_at": sleep_start,
+            "sleep_stop_at": sleep_stop
+        })
+
+    async def set_device_refresh_rate(self, device_id: str, refresh_rate: int) -> bool:
+        """Set device refresh rate in seconds."""
+        return await self.update_device(device_id, {"refresh_rate": refresh_rate})
+
+    async def set_device_image_timeout(self, device_id: str, timeout: int) -> bool:
+        """Set device image timeout in seconds."""
+        return await self.update_device(device_id, {"image_timeout": timeout})
+
+    async def enable_firmware_update(self, device_id: str, enable: bool = True) -> bool:
+        """Enable or disable firmware updates for device."""
+        return await self.update_device(device_id, {"firmware_update": enable})
+
     async def refresh_device(self, device_id: str) -> bool:
         """Trigger a device refresh by updating its data."""
         try:
@@ -181,3 +295,143 @@ class TRMNLApi:
         except Exception as e:
             _LOGGER.error("Error refreshing device %s: %s", device_id, e)
             return False
+
+    # Screen Management Methods
+    async def create_screen(self, screen_data: Dict) -> Optional[Dict]:
+        """Create a new screen in Terminus."""
+        try:
+            _LOGGER.info("Creating screen: %s", screen_data.get('name', 'unknown'))
+            result = await self._make_request("/api/screens", method="POST", data={"image": screen_data})
+            if result:
+                _LOGGER.info("Successfully created screen")
+                return result.get("data")
+            return None
+        except Exception as e:
+            _LOGGER.error("Error creating screen: %s", e)
+            return None
+
+    async def update_screen(self, screen_id: str, screen_data: Dict) -> bool:
+        """Update a screen in Terminus."""
+        try:
+            _LOGGER.info("Updating screen %s", screen_id)
+            result = await self._make_request(f"/api/screens/{screen_id}", method="PATCH", data={"image": screen_data})
+            if result:
+                _LOGGER.info("Successfully updated screen %s", screen_id)
+                return True
+            return False
+        except Exception as e:
+            _LOGGER.error("Error updating screen %s: %s", screen_id, e)
+            return False
+
+    async def delete_screen(self, screen_id: str) -> bool:
+        """Delete a screen from Terminus."""
+        try:
+            _LOGGER.info("Deleting screen %s", screen_id)
+            result = await self._make_request(f"/api/screens/{screen_id}", method="DELETE")
+            if result:
+                _LOGGER.info("Successfully deleted screen %s", screen_id)
+                return True
+            return False
+        except Exception as e:
+            _LOGGER.error("Error deleting screen %s: %s", screen_id, e)
+            return False
+
+    async def get_screen(self, screen_id: str) -> Optional[Dict]:
+        """Get a specific screen by ID."""
+        try:
+            result = await self._make_request(f"/api/screens/{screen_id}")
+            if result and "data" in result:
+                return result["data"]
+            return None
+        except Exception as e:
+            _LOGGER.error("Error getting screen %s: %s", screen_id, e)
+            return None
+
+    # Model Management Methods
+    async def create_model(self, model_data: Dict) -> Optional[Dict]:
+        """Create a new model in Terminus."""
+        try:
+            _LOGGER.info("Creating model: %s", model_data.get('name', 'unknown'))
+            result = await self._make_request("/api/models", method="POST", data={"model": model_data})
+            if result:
+                _LOGGER.info("Successfully created model")
+                return result.get("data")
+            return None
+        except Exception as e:
+            _LOGGER.error("Error creating model: %s", e)
+            return None
+
+    async def update_model(self, model_id: str, model_data: Dict) -> bool:
+        """Update a model in Terminus."""
+        try:
+            _LOGGER.info("Updating model %s", model_id)
+            result = await self._make_request(f"/api/models/{model_id}", method="PATCH", data={"model": model_data})
+            if result:
+                _LOGGER.info("Successfully updated model %s", model_id)
+                return True
+            return False
+        except Exception as e:
+            _LOGGER.error("Error updating model %s: %s", model_id, e)
+            return False
+
+    async def delete_model(self, model_id: str) -> bool:
+        """Delete a model from Terminus."""
+        try:
+            _LOGGER.info("Deleting model %s", model_id)
+            result = await self._make_request(f"/api/models/{model_id}", method="DELETE")
+            if result:
+                _LOGGER.info("Successfully deleted model %s", model_id)
+                return True
+            return False
+        except Exception as e:
+            _LOGGER.error("Error deleting model %s: %s", model_id, e)
+            return False
+
+    async def get_model(self, model_id: str) -> Optional[Dict]:
+        """Get a specific model by ID."""
+        try:
+            result = await self._make_request(f"/api/models/{model_id}")
+            if result and "data" in result:
+                return result["data"]
+            return None
+        except Exception as e:
+            _LOGGER.error("Error getting model %s: %s", model_id, e)
+            return None
+
+    # Display and Content Management
+    async def get_device_display(self, device_id: str) -> Optional[Dict]:
+        """Get the current display content for a device."""
+        try:
+            result = await self._make_request(f"/api/display/{device_id}")
+            if result:
+                _LOGGER.debug("Retrieved display content for device %s", device_id)
+                return result
+            return None
+        except Exception as e:
+            _LOGGER.error("Error getting display for device %s: %s", device_id, e)
+            return None
+
+    async def send_device_log(self, device_id: str, log_data: Dict) -> bool:
+        """Send log data from a device."""
+        try:
+            _LOGGER.debug("Sending log data for device %s", device_id)
+            result = await self._make_request("/api/log", method="POST", data=log_data)
+            if result:
+                return True
+            return False
+        except Exception as e:
+            _LOGGER.error("Error sending log for device %s: %s", device_id, e)
+            return False
+
+    # Setup and Configuration
+    async def get_setup_info(self) -> Optional[Dict]:
+        """Get setup information from Terminus."""
+        try:
+            result = await self._make_request("/api/setup")
+            if result:
+                _LOGGER.debug("Retrieved setup information")
+                return result
+            return None
+        except Exception as e:
+            _LOGGER.error("Error getting setup info: %s", e)
+            return None
