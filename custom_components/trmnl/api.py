@@ -260,67 +260,53 @@ class TRMNLApi:
         return await self.update_device(device_id, {"firmware_update": enable})
 
     async def refresh_device(self, device_id: str) -> bool:
-        """Refresh device using the most reliable method available."""
+        """Refresh device by pre-generating content multiple times to encourage polling."""
         try:
             _LOGGER.info("Refreshing device: %s", device_id)
             
             # Find device data
             devices = await self.get_devices()
             device_data = None
-            numeric_id = None
             mac_address = None
             
             for device in devices:
                 if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
                     device_data = device.copy()
-                    numeric_id = device.get('id')
                     mac_address = device.get('mac_address')
                     break
             
-            if not device_data or not numeric_id:
-                _LOGGER.error("Device %s not found", device_id)
+            if not device_data or not mac_address:
+                _LOGGER.error("Device %s not found or missing MAC address", device_id)
                 return False
             
-            # Method 1: Pre-generate fresh display content
-            # This ensures the server has the latest content ready
-            _LOGGER.info("Pre-generating display content for device %s", device_id)
-            display_result = await self.get_device_display(device_id)
+            current_rate = device_data.get('refresh_rate', 3600)
+            _LOGGER.info("Device %s has %s second refresh rate", device_id, current_rate)
             
-            if display_result and 'image_url' in display_result:
-                _LOGGER.info("Fresh content prepared: %s", display_result['filename'])
+            # Method: Pre-generate display content multiple times
+            # This forces server-side processing and may encourage device polling
+            success_count = 0
+            
+            for i in range(3):  # Try 3 times
+                _LOGGER.info("Pre-generating display content (attempt %d/3)", i + 1)
+                display_result = await self.get_device_display(device_id)
                 
-                # Method 2: Set refresh rate to 5 seconds temporarily to force immediate check
-                # Only if current rate is higher than 5 seconds
-                current_rate = device_data.get('refresh_rate', 3600)
-                
-                if current_rate > 5:
-                    _LOGGER.info("Setting temporary 5-second refresh rate (was %s)", current_rate)
+                if display_result and 'image_url' in display_result:
+                    _LOGGER.info("Content ready: %s", display_result.get('filename', 'unknown'))
+                    success_count += 1
                     
-                    # Set to 5 seconds 
-                    fast_result = await self._make_request(
-                        f"/api/devices/{numeric_id}", 
-                        method="PATCH", 
-                        data={"device": {"refresh_rate": 5}}
-                    )
-                    
-                    if fast_result:
-                        # Wait 8 seconds for device to poll, then restore
+                    # Brief pause between attempts
+                    if i < 2:  # Don't sleep after last attempt
                         import asyncio
-                        await asyncio.sleep(8)
-                        
-                        # Restore original rate
-                        await self._make_request(
-                            f"/api/devices/{numeric_id}", 
-                            method="PATCH", 
-                            data={"device": {"refresh_rate": current_rate}}
-                        )
-                        _LOGGER.info("Restored original refresh rate %s", current_rate)
+                        await asyncio.sleep(1)
                 else:
-                    _LOGGER.info("Device already has fast refresh rate (%s seconds), content should update soon", current_rate)
-                
+                    _LOGGER.warning("Failed to prepare content on attempt %d", i + 1)
+            
+            if success_count > 0:
+                _LOGGER.info("Successfully prepared fresh content for device %s (%d/3 attempts)", device_id, success_count)
+                _LOGGER.info("Device should poll and update within %s seconds based on its current refresh rate", current_rate)
                 return True
             else:
-                _LOGGER.warning("Failed to prepare fresh display content for device %s", device_id)
+                _LOGGER.error("Failed to prepare any fresh content for device %s", device_id)
                 return False
                 
         except Exception as e:
