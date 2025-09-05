@@ -260,56 +260,60 @@ class TRMNLApi:
         return await self.update_device(device_id, {"firmware_update": enable})
 
     async def refresh_device(self, device_id: str) -> bool:
-        """Trigger a device refresh using proper TRMNL mechanisms."""
+        """Trigger a device refresh by simulating what Terminus web UI does."""
         try:
-            _LOGGER.info("Refreshing device: %s", device_id)
+            _LOGGER.error("REFRESH DEBUG: Starting refresh for device %s", device_id)
             
-            # Find the device data
+            # Find the device data  
             devices = await self.get_devices()
             device_data = None
             numeric_id = None
+            mac_address = None
             
             for device in devices:
                 if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
                     device_data = device.copy()
                     numeric_id = device.get('id')
+                    mac_address = device.get('mac_address')
                     break
             
             if not device_data or not numeric_id:
-                _LOGGER.error("Device %s not found", device_id)
+                _LOGGER.error("REFRESH DEBUG: Device %s not found", device_id)
                 return False
+                
+            _LOGGER.error("REFRESH DEBUG: Found device %s (ID: %s, MAC: %s)", device_id, numeric_id, mac_address)
             
-            # Method 1: Call the display API as the device would
-            # This ensures the latest content is processed and available
+            # Method 1: Pre-generate display content by calling display API
+            # This forces the server to prepare the latest content for this device
             display_result = await self.get_device_display(device_id)
             if display_result:
-                _LOGGER.info("Retrieved current display content for device %s", device_id)
-                
-                # Log what content is available
-                if 'image_url' in display_result:
-                    _LOGGER.info("Device %s has image URL: %s", device_id, display_result['image_url'])
-                if 'refresh_rate' in display_result:
-                    _LOGGER.info("Device %s refresh rate: %s", device_id, display_result['refresh_rate'])
+                _LOGGER.error("REFRESH DEBUG: Pre-generated display content: %s", display_result)
+            else:
+                _LOGGER.error("REFRESH DEBUG: Failed to pre-generate display content")
             
-            # Method 2: Force the device to check for updates by setting a very short refresh rate
-            # then immediately restoring it. This causes the device to wake up and poll immediately.
+            # Method 2: Force refresh by temporarily setting very low refresh rate (10 seconds)
             original_refresh_rate = device_data.get('refresh_rate', 3600)
+            _LOGGER.error("REFRESH DEBUG: Original refresh rate: %s", original_refresh_rate)
             
-            # Set to 30 seconds to force immediate polling
-            _LOGGER.info("Setting temporary 30-second refresh rate to force device %s to poll immediately", device_id)
+            # Set to 10 seconds to force almost immediate polling
+            temp_rate = 10
+            _LOGGER.error("REFRESH DEBUG: Setting refresh rate to %s seconds", temp_rate)
+            
             fast_refresh_result = await self._make_request(
                 f"/api/devices/{numeric_id}", 
                 method="PATCH", 
-                data={"device": {"refresh_rate": 30}}
+                data={"device": {"refresh_rate": temp_rate}}
             )
             
             if fast_refresh_result:
-                _LOGGER.info("Device %s should now poll within 30 seconds. Restoring original refresh rate...", device_id)
+                _LOGGER.error("REFRESH DEBUG: Successfully set fast refresh rate. Device should poll in %s seconds", temp_rate)
                 
-                # Wait a moment, then restore original rate
+                # Wait longer to let device actually poll
                 import asyncio
-                await asyncio.sleep(2)  # Give it a moment to register the change
+                await asyncio.sleep(5)  # Wait 5 seconds before restoring
                 
+                # Restore original rate
+                _LOGGER.error("REFRESH DEBUG: Restoring original refresh rate %s", original_refresh_rate)
                 restore_result = await self._make_request(
                     f"/api/devices/{numeric_id}", 
                     method="PATCH", 
@@ -317,23 +321,23 @@ class TRMNLApi:
                 )
                 
                 if restore_result:
-                    _LOGGER.info("Successfully triggered refresh for device %s and restored refresh rate", device_id)
+                    _LOGGER.error("REFRESH DEBUG: Successfully restored refresh rate")
                     return True
                 else:
-                    _LOGGER.warning("Triggered refresh for device %s but failed to restore refresh rate", device_id)
-                    # Try once more to restore it
+                    _LOGGER.error("REFRESH DEBUG: Failed to restore refresh rate, trying again...")
+                    await asyncio.sleep(1)
                     await self._make_request(
                         f"/api/devices/{numeric_id}", 
                         method="PATCH", 
                         data={"device": {"refresh_rate": original_refresh_rate}}
                     )
-                    return True  # Still consider refresh successful
+                    return True  # Consider it successful even if restore failed
             else:
-                _LOGGER.error("Failed to set fast refresh rate for device %s", device_id)
+                _LOGGER.error("REFRESH DEBUG: Failed to set fast refresh rate")
                 return False
                 
         except Exception as e:
-            _LOGGER.error("Error refreshing device %s: %s", device_id, e)
+            _LOGGER.error("REFRESH DEBUG: Exception during refresh: %s", device_id, e)
             return False
 
     # Screen Management Methods
