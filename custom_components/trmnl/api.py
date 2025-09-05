@@ -260,11 +260,11 @@ class TRMNLApi:
         return await self.update_device(device_id, {"firmware_update": enable})
 
     async def refresh_device(self, device_id: str) -> bool:
-        """Trigger a device refresh by simulating what Terminus web UI does."""
+        """Refresh device using the most reliable method available."""
         try:
-            _LOGGER.error("REFRESH DEBUG: Starting refresh for device %s", device_id)
+            _LOGGER.info("Refreshing device: %s", device_id)
             
-            # Find the device data  
+            # Find device data
             devices = await self.get_devices()
             device_data = None
             numeric_id = None
@@ -278,66 +278,53 @@ class TRMNLApi:
                     break
             
             if not device_data or not numeric_id:
-                _LOGGER.error("REFRESH DEBUG: Device %s not found", device_id)
+                _LOGGER.error("Device %s not found", device_id)
                 return False
-                
-            _LOGGER.error("REFRESH DEBUG: Found device %s (ID: %s, MAC: %s)", device_id, numeric_id, mac_address)
             
-            # Method 1: Pre-generate display content by calling display API
-            # This forces the server to prepare the latest content for this device
+            # Method 1: Pre-generate fresh display content
+            # This ensures the server has the latest content ready
+            _LOGGER.info("Pre-generating display content for device %s", device_id)
             display_result = await self.get_device_display(device_id)
-            if display_result:
-                _LOGGER.error("REFRESH DEBUG: Pre-generated display content: %s", display_result)
-            else:
-                _LOGGER.error("REFRESH DEBUG: Failed to pre-generate display content")
             
-            # Method 2: Force refresh by temporarily setting very low refresh rate (10 seconds)
-            original_refresh_rate = device_data.get('refresh_rate', 3600)
-            _LOGGER.error("REFRESH DEBUG: Original refresh rate: %s", original_refresh_rate)
-            
-            # Set to 10 seconds to force almost immediate polling
-            temp_rate = 10
-            _LOGGER.error("REFRESH DEBUG: Setting refresh rate to %s seconds", temp_rate)
-            
-            fast_refresh_result = await self._make_request(
-                f"/api/devices/{numeric_id}", 
-                method="PATCH", 
-                data={"device": {"refresh_rate": temp_rate}}
-            )
-            
-            if fast_refresh_result:
-                _LOGGER.error("REFRESH DEBUG: Successfully set fast refresh rate. Device should poll in %s seconds", temp_rate)
+            if display_result and 'image_url' in display_result:
+                _LOGGER.info("Fresh content prepared: %s", display_result['filename'])
                 
-                # Wait longer to let device actually poll
-                import asyncio
-                await asyncio.sleep(5)  # Wait 5 seconds before restoring
+                # Method 2: Set refresh rate to 5 seconds temporarily to force immediate check
+                # Only if current rate is higher than 5 seconds
+                current_rate = device_data.get('refresh_rate', 3600)
                 
-                # Restore original rate
-                _LOGGER.error("REFRESH DEBUG: Restoring original refresh rate %s", original_refresh_rate)
-                restore_result = await self._make_request(
-                    f"/api/devices/{numeric_id}", 
-                    method="PATCH", 
-                    data={"device": {"refresh_rate": original_refresh_rate}}
-                )
-                
-                if restore_result:
-                    _LOGGER.error("REFRESH DEBUG: Successfully restored refresh rate")
-                    return True
-                else:
-                    _LOGGER.error("REFRESH DEBUG: Failed to restore refresh rate, trying again...")
-                    await asyncio.sleep(1)
-                    await self._make_request(
+                if current_rate > 5:
+                    _LOGGER.info("Setting temporary 5-second refresh rate (was %s)", current_rate)
+                    
+                    # Set to 5 seconds 
+                    fast_result = await self._make_request(
                         f"/api/devices/{numeric_id}", 
                         method="PATCH", 
-                        data={"device": {"refresh_rate": original_refresh_rate}}
+                        data={"device": {"refresh_rate": 5}}
                     )
-                    return True  # Consider it successful even if restore failed
+                    
+                    if fast_result:
+                        # Wait 8 seconds for device to poll, then restore
+                        import asyncio
+                        await asyncio.sleep(8)
+                        
+                        # Restore original rate
+                        await self._make_request(
+                            f"/api/devices/{numeric_id}", 
+                            method="PATCH", 
+                            data={"device": {"refresh_rate": current_rate}}
+                        )
+                        _LOGGER.info("Restored original refresh rate %s", current_rate)
+                else:
+                    _LOGGER.info("Device already has fast refresh rate (%s seconds), content should update soon", current_rate)
+                
+                return True
             else:
-                _LOGGER.error("REFRESH DEBUG: Failed to set fast refresh rate")
+                _LOGGER.warning("Failed to prepare fresh display content for device %s", device_id)
                 return False
                 
         except Exception as e:
-            _LOGGER.error("REFRESH DEBUG: Exception during refresh: %s", device_id, e)
+            _LOGGER.error("Error refreshing device %s: %s", device_id, e)
             return False
 
     # Screen Management Methods
