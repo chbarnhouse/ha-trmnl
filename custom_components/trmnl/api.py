@@ -110,16 +110,33 @@ class TRMNLApi:
 
     async def get_playlists(self) -> List[Dict]:
         """Get all playlists from Terminus."""
-        _LOGGER.debug("Fetching playlists from %s", self.base_url)
-        result = await self._make_request("/playlists")
+        _LOGGER.error("PLAYLIST DEBUG: Fetching playlists from %s", self.base_url)
         
-        if result and "data" in result:
-            playlists = result["data"]
-            _LOGGER.debug("Found %d playlists", len(playlists))
-            return playlists
-        else:
-            _LOGGER.debug("No playlists found or API error")
-            return []
+        # Try multiple possible endpoints
+        endpoints_to_try = ["/playlists", "/api/playlists"]
+        
+        for endpoint in endpoints_to_try:
+            _LOGGER.error("PLAYLIST DEBUG: Trying endpoint %s", endpoint)
+            result = await self._make_request(endpoint)
+            
+            if result:
+                _LOGGER.error("PLAYLIST DEBUG: Response from %s: %s", endpoint, result)
+                
+                # Check if it's a direct array or wrapped in "data"
+                if isinstance(result, list):
+                    _LOGGER.error("PLAYLIST DEBUG: Found %d playlists (direct array)", len(result))
+                    return result
+                elif isinstance(result, dict) and "data" in result:
+                    playlists = result["data"]
+                    _LOGGER.error("PLAYLIST DEBUG: Found %d playlists (data wrapper)", len(playlists))
+                    return playlists
+                else:
+                    _LOGGER.error("PLAYLIST DEBUG: Unexpected response format from %s", endpoint)
+            else:
+                _LOGGER.error("PLAYLIST DEBUG: No response from %s", endpoint)
+        
+        _LOGGER.error("PLAYLIST DEBUG: No playlists found from any endpoint")
+        return []
 
     async def assign_device_to_playlist(self, device_id: str, playlist_id: str) -> bool:
         """Assign a device to a specific playlist."""
