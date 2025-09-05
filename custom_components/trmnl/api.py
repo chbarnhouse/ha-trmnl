@@ -262,10 +262,18 @@ class TRMNLApi:
     async def refresh_device(self, device_id: str) -> bool:
         """Refresh device by pre-generating content multiple times to encourage polling."""
         try:
-            _LOGGER.info("Refreshing device: %s", device_id)
+            _LOGGER.error("REFRESH START: Attempting to refresh device %s", device_id)
+            
+            # Test basic API connectivity first
+            try:
+                _LOGGER.error("REFRESH DEBUG: Testing API connectivity...")
+                devices = await self.get_devices()
+                _LOGGER.error("REFRESH DEBUG: API call successful, found %d devices", len(devices))
+            except Exception as api_error:
+                _LOGGER.error("REFRESH DEBUG: API call failed: %s", api_error)
+                return False
             
             # Find device data
-            devices = await self.get_devices()
             device_data = None
             mac_address = None
             
@@ -276,41 +284,45 @@ class TRMNLApi:
                     break
             
             if not device_data or not mac_address:
-                _LOGGER.error("Device %s not found or missing MAC address", device_id)
+                _LOGGER.error("REFRESH DEBUG: Device %s not found or missing MAC address", device_id)
                 return False
             
             current_rate = device_data.get('refresh_rate', 3600)
-            _LOGGER.info("Device %s has %s second refresh rate", device_id, current_rate)
+            _LOGGER.error("REFRESH DEBUG: Device %s has %s second refresh rate", device_id, current_rate)
             
             # Method: Pre-generate display content multiple times
             # This forces server-side processing and may encourage device polling
             success_count = 0
             
             for i in range(3):  # Try 3 times
-                _LOGGER.info("Pre-generating display content (attempt %d/3)", i + 1)
-                display_result = await self.get_device_display(device_id)
-                
-                if display_result and 'image_url' in display_result:
-                    _LOGGER.info("Content ready: %s", display_result.get('filename', 'unknown'))
-                    success_count += 1
-                    
-                    # Brief pause between attempts
-                    if i < 2:  # Don't sleep after last attempt
-                        import asyncio
-                        await asyncio.sleep(1)
-                else:
-                    _LOGGER.warning("Failed to prepare content on attempt %d", i + 1)
+                _LOGGER.error("REFRESH DEBUG: Pre-generating display content (attempt %d/3)", i + 1)
+                try:
+                    display_result = await self.get_device_display(device_id)
+                    if display_result and 'image_url' in display_result:
+                        _LOGGER.error("REFRESH DEBUG: Content ready: %s", display_result.get('filename', 'unknown'))
+                        success_count += 1
+                        
+                        # Brief pause between attempts
+                        if i < 2:  # Don't sleep after last attempt
+                            import asyncio
+                            await asyncio.sleep(1)
+                    else:
+                        _LOGGER.error("REFRESH DEBUG: Failed to prepare content on attempt %d - no result or no image_url", i + 1)
+                except Exception as display_error:
+                    _LOGGER.error("REFRESH DEBUG: Display API error on attempt %d: %s", i + 1, display_error)
             
             if success_count > 0:
-                _LOGGER.info("Successfully prepared fresh content for device %s (%d/3 attempts)", device_id, success_count)
-                _LOGGER.info("Device should poll and update within %s seconds based on its current refresh rate", current_rate)
+                _LOGGER.error("REFRESH DEBUG: Successfully prepared fresh content for device %s (%d/3 attempts)", device_id, success_count)
+                _LOGGER.error("REFRESH DEBUG: Device should poll and update within %s seconds", current_rate)
                 return True
             else:
-                _LOGGER.error("Failed to prepare any fresh content for device %s", device_id)
+                _LOGGER.error("REFRESH DEBUG: Failed to prepare any fresh content for device %s", device_id)
                 return False
                 
         except Exception as e:
-            _LOGGER.error("Error refreshing device %s: %s", device_id, e)
+            _LOGGER.error("REFRESH DEBUG: Exception in refresh_device: %s", str(e))
+            import traceback
+            _LOGGER.error("REFRESH DEBUG: Full traceback: %s", traceback.format_exc())
             return False
 
     # Screen Management Methods
