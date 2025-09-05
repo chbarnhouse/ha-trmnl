@@ -107,6 +107,56 @@ class TRMNLApi:
         else:
             _LOGGER.error("No screens found or API error")
             return []
+
+    async def get_playlists(self) -> List[Dict]:
+        """Get all playlists from Terminus."""
+        _LOGGER.debug("Fetching playlists from %s", self.base_url)
+        result = await self._make_request("/playlists")
+        
+        if result and "data" in result:
+            playlists = result["data"]
+            _LOGGER.debug("Found %d playlists", len(playlists))
+            return playlists
+        else:
+            _LOGGER.debug("No playlists found or API error")
+            return []
+
+    async def assign_device_to_playlist(self, device_id: str, playlist_id: str) -> bool:
+        """Assign a device to a specific playlist."""
+        try:
+            _LOGGER.info("Assigning device %s to playlist %s", device_id, playlist_id)
+            
+            # Find the device's numeric ID
+            devices = await self.get_devices()
+            numeric_id = None
+            
+            for device in devices:
+                if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
+                    numeric_id = device.get('id')
+                    break
+            
+            if not numeric_id:
+                _LOGGER.error("Device %s not found", device_id)
+                return False
+            
+            # Update device to assign to playlist
+            # Note: The exact field name may need to be adjusted based on Terminus API
+            result = await self._make_request(
+                f"/api/devices/{numeric_id}", 
+                method="PATCH", 
+                data={"device": {"playlist_id": playlist_id}}
+            )
+            
+            if result:
+                _LOGGER.info("Successfully assigned device %s to playlist %s", device_id, playlist_id)
+                return True
+            else:
+                _LOGGER.error("Failed to assign device %s to playlist %s", device_id, playlist_id)
+                return False
+                
+        except Exception as e:
+            _LOGGER.error("Error assigning device %s to playlist %s: %s", device_id, playlist_id, e)
+            return False
             
     async def get_models(self) -> Dict[str, str]:
         """Get all models from Terminus and return as ID->name mapping."""
@@ -260,69 +310,38 @@ class TRMNLApi:
         return await self.update_device(device_id, {"firmware_update": enable})
 
     async def refresh_device(self, device_id: str) -> bool:
-        """Refresh device by pre-generating content multiple times to encourage polling."""
+        """Refresh device by pre-generating fresh content for next polling cycle."""
         try:
-            _LOGGER.error("REFRESH START: Attempting to refresh device %s", device_id)
-            
-            # Test basic API connectivity first
-            try:
-                _LOGGER.error("REFRESH DEBUG: Testing API connectivity...")
-                devices = await self.get_devices()
-                _LOGGER.error("REFRESH DEBUG: API call successful, found %d devices", len(devices))
-            except Exception as api_error:
-                _LOGGER.error("REFRESH DEBUG: API call failed: %s", api_error)
-                return False
+            _LOGGER.info("Refreshing device %s - preparing fresh content", device_id)
             
             # Find device data
+            devices = await self.get_devices()
             device_data = None
-            mac_address = None
             
             for device in devices:
                 if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
                     device_data = device.copy()
-                    mac_address = device.get('mac_address')
                     break
             
-            if not device_data or not mac_address:
-                _LOGGER.error("REFRESH DEBUG: Device %s not found or missing MAC address", device_id)
+            if not device_data:
+                _LOGGER.error("Device %s not found", device_id)
                 return False
             
             current_rate = device_data.get('refresh_rate', 3600)
-            _LOGGER.error("REFRESH DEBUG: Device %s has %s second refresh rate", device_id, current_rate)
             
-            # Method: Pre-generate display content multiple times
-            # This forces server-side processing and may encourage device polling
-            success_count = 0
+            # Pre-generate fresh display content
+            display_result = await self.get_device_display(device_id)
             
-            for i in range(3):  # Try 3 times
-                _LOGGER.error("REFRESH DEBUG: Pre-generating display content (attempt %d/3)", i + 1)
-                try:
-                    display_result = await self.get_device_display(device_id)
-                    if display_result and 'image_url' in display_result:
-                        _LOGGER.error("REFRESH DEBUG: Content ready: %s", display_result.get('filename', 'unknown'))
-                        success_count += 1
-                        
-                        # Brief pause between attempts
-                        if i < 2:  # Don't sleep after last attempt
-                            import asyncio
-                            await asyncio.sleep(1)
-                    else:
-                        _LOGGER.error("REFRESH DEBUG: Failed to prepare content on attempt %d - no result or no image_url", i + 1)
-                except Exception as display_error:
-                    _LOGGER.error("REFRESH DEBUG: Display API error on attempt %d: %s", i + 1, display_error)
-            
-            if success_count > 0:
-                _LOGGER.error("REFRESH DEBUG: Successfully prepared fresh content for device %s (%d/3 attempts)", device_id, success_count)
-                _LOGGER.error("REFRESH DEBUG: Device should poll and update within %s seconds", current_rate)
+            if display_result and 'image_url' in display_result:
+                _LOGGER.info("Fresh content prepared for device %s: %s", device_id, display_result.get('filename', 'unknown'))
+                _LOGGER.info("Device will update on next polling cycle (within %s seconds)", current_rate)
                 return True
             else:
-                _LOGGER.error("REFRESH DEBUG: Failed to prepare any fresh content for device %s", device_id)
+                _LOGGER.error("Failed to prepare fresh content for device %s", device_id)
                 return False
                 
         except Exception as e:
-            _LOGGER.error("REFRESH DEBUG: Exception in refresh_device: %s", str(e))
-            import traceback
-            _LOGGER.error("REFRESH DEBUG: Full traceback: %s", traceback.format_exc())
+            _LOGGER.error("Error refreshing device %s: %s", device_id, e)
             return False
 
     # Screen Management Methods

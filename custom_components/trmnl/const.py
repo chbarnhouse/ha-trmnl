@@ -3,7 +3,7 @@
 DOMAIN = "trmnl"
 
 # Platforms
-PLATFORMS = ["sensor", "switch", "button", "number", "time"]
+PLATFORMS = ["sensor", "switch", "button", "number", "time", "select"]
 
 # Configuration
 CONF_HOST = "host"

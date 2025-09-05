@@ -51,6 +51,11 @@ MODEL_CREATE_SCHEMA = vol.Schema({
     vol.Optional("bit_depth"): vol.Coerce(int),
 })
 
+PLAYLIST_ASSIGN_SCHEMA = vol.Schema({
+    vol.Required("device_id"): cv.string,
+    vol.Required("playlist_id"): cv.string,
+})
+
 
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up TRMNL services."""
@@ -202,6 +207,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if not result:
             raise ServiceValidationError("Failed to create model")
     
+    async def handle_assign_playlist(call: ServiceCall) -> None:
+        """Handle playlist assignment service call."""
+        device_id = call.data.get("device_id")
+        playlist_id = call.data.get("playlist_id")
+        
+        # Find the API instance
+        api = None
+        for entry_id, entry_data in hass.data[DOMAIN].items():
+            if isinstance(entry_data, dict) and "api" in entry_data:
+                api = entry_data["api"]
+                break
+        
+        if not api:
+            raise ServiceValidationError("No TRMNL integration configured")
+        
+        success = await api.assign_device_to_playlist(device_id, playlist_id)
+        if not success:
+            raise ServiceValidationError(f"Failed to assign device {device_id} to playlist {playlist_id}")
+    
     # Register services
     hass.services.async_register(
         DOMAIN, "refresh_device", handle_refresh_device,
@@ -233,6 +257,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         schema=MODEL_CREATE_SCHEMA
     )
     
+    hass.services.async_register(
+        DOMAIN, "assign_playlist", handle_assign_playlist,
+        schema=PLAYLIST_ASSIGN_SCHEMA
+    )
+    
     _LOGGER.info("TRMNL services registered")
 
 
@@ -245,6 +274,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         "update_screen",
         "delete_screen",
         "create_model",
+        "assign_playlist",
     ]
     
     for service in services:
