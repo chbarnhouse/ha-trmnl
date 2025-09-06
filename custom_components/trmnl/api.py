@@ -111,83 +111,58 @@ class TRMNLApi:
 
     async def get_playlists(self) -> List[Dict]:
         """Get all playlists from Terminus."""
-        _LOGGER.error("PLAYLIST DEBUG: Fetching playlists from %s", self.base_url)
+        _LOGGER.debug("Fetching playlists from Terminus")
         
-        # Try comprehensive list of possible API endpoints
-        endpoints_to_try = [
-            "/api/playlists", 
-            "/playlists.json",
-            "/admin/playlists.json",
-            "/admin/api/playlists",
-            "/api/v1/playlists",
-            "/admin/playlists",
-            "/playlists"  # Even though this returns HTML, let's see the full response
-        ]
+        # Since there's no JSON API for playlists, we'll get them via individual API calls
+        # First, collect all playlist IDs that are in use by devices
+        devices = await self.get_devices()
+        playlist_ids = set()
         
-        for endpoint in endpoints_to_try:
-            _LOGGER.error("PLAYLIST DEBUG: Trying endpoint %s", endpoint)
-            
+        for device in devices:
+            playlist_id = device.get('playlist_id')
+            if playlist_id:
+                playlist_ids.add(playlist_id)
+        
+        # If no playlists found in devices, try a range of common playlist IDs
+        if not playlist_ids:
+            playlist_ids = set(range(1, 11))  # Try 1-10
+        
+        playlists = []
+        
+        # For each playlist ID, try to get its actual name by attempting to update it with the same data
+        # This will tell us if the playlist exists and what its current name is
+        for playlist_id in playlist_ids:
             try:
-                # Make raw request to see headers and content type
-                async with self.session.get(f"{self.base_url}{endpoint}") as response:
-                    _LOGGER.error("PLAYLIST DEBUG: %s - Status: %d, Content-Type: %s", 
-                                endpoint, response.status, response.headers.get('content-type', 'unknown'))
+                # Try to get playlist info by making a "no-op" update request
+                # This endpoint should return the current playlist data
+                result = await self._make_request(f"/api/playlists/{playlist_id}")
+                
+                if result and isinstance(result, dict):
+                    # We got playlist data back
+                    playlist_data = result.get("data", result)
+                    playlists.append({
+                        'id': playlist_id,
+                        'name': playlist_data.get('label', playlist_data.get('name', f"Playlist {playlist_id}"))
+                    })
+                else:
+                    # Playlist exists but no detailed data, use default name
+                    playlists.append({
+                        'id': playlist_id,
+                        'name': f"Playlist {playlist_id}"
+                    })
                     
-                    if response.status == 200:
-                        content_type = response.headers.get('content-type', '')
-                        
-                        if 'json' in content_type.lower():
-                            result = await response.json()
-                            _LOGGER.error("PLAYLIST DEBUG: JSON response from %s: %s", endpoint, result)
-                            
-                            # Check if it's a direct array or wrapped in "data"
-                            if isinstance(result, list):
-                                _LOGGER.error("PLAYLIST DEBUG: Found %d playlists (direct array)", len(result))
-                                return result
-                            elif isinstance(result, dict) and "data" in result:
-                                playlists = result["data"]
-                                _LOGGER.error("PLAYLIST DEBUG: Found %d playlists (data wrapper)", len(playlists))
-                                return playlists
-                        else:
-                            # For HTML responses, let's see if we can parse playlist info
-                            text = await response.text()
-                            _LOGGER.error("PLAYLIST DEBUG: Non-JSON response from %s (first 200 chars): %s", 
-                                        endpoint, text[:200])
-                            
-                            # Try to extract playlist references from HTML
-                            import re
-                            playlist_matches = re.findall(r'playlist["\s]*:\s*["\s]*(\d+)["\s]*[,}]', text, re.IGNORECASE)
-                            name_matches = re.findall(r'name["\s]*:\s*["\s]*([^"]+)["\s]*[,}]', text, re.IGNORECASE)
-                            
-                            if playlist_matches:
-                                _LOGGER.error("PLAYLIST DEBUG: Found playlist IDs in HTML: %s", playlist_matches)
-                            if name_matches:
-                                _LOGGER.error("PLAYLIST DEBUG: Found names in HTML: %s", name_matches)
-                    else:
-                        _LOGGER.error("PLAYLIST DEBUG: %s returned status %d", endpoint, response.status)
-                        
-            except Exception as e:
-                _LOGGER.error("PLAYLIST DEBUG: Error with endpoint %s: %s", endpoint, e)
+            except Exception:
+                # If we can't get the playlist, assume it exists with default name
+                playlists.append({
+                    'id': playlist_id,
+                    'name': f"Playlist {playlist_id}"
+                })
         
-        # Try to get screens and see if they contain playlist info
-        _LOGGER.error("PLAYLIST DEBUG: Checking screens for playlist information")
-        screens = await self.get_screens()
-        _LOGGER.error("PLAYLIST DEBUG: Got %d screens: %s", len(screens), screens)
+        # Sort playlists by ID
+        playlists.sort(key=lambda x: x['id'])
         
-        # Fallback: Since devices contain playlist_id, create generic playlists
-        # But try to get ALL possible playlist IDs (not just from current device)
-        _LOGGER.error("PLAYLIST DEBUG: Falling back to creating generic playlists")
-        
-        # Assume playlists 1-10 exist (common range) and let user select
-        fallback_playlists = []
-        for i in range(1, 11):
-            fallback_playlists.append({
-                'id': i,
-                'name': f"Playlist {i}"
-            })
-        
-        _LOGGER.error("PLAYLIST DEBUG: Created %d fallback playlists", len(fallback_playlists))
-        return fallback_playlists
+        _LOGGER.debug("Found %d playlists: %s", len(playlists), [p['name'] for p in playlists])
+        return playlists
 
     async def assign_device_to_playlist(self, device_id: str, playlist_id: str) -> bool:
         """Assign a device to a specific playlist."""

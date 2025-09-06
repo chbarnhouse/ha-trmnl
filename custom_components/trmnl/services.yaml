@@ -717,3 +717,36 @@ device_setup:
       required: false
       selector:
         boolean:
+
+# === PLAYLIST NAMING SERVICES ===
+
+update_playlist_name:
+  name: Update Playlist Name
+  description: Update the name/label of a playlist
+  fields:
+    playlist_id:
+      name: Playlist ID
+      description: ID of the playlist to rename (check your device's Playlist ID sensor)
+      required: true
+      selector:
+        text:
+      example: "1"
+    name:
+      name: New Name
+      description: New name for the playlist
+      required: true
+      selector:
+        text:
+      example: "Morning Dashboard"
+
+reset_playlist_name:
+  name: Reset Playlist Name
+  description: Reset a playlist name back to the default "Playlist X" format
+  fields:
+    playlist_id:
+      name: Playlist ID
+      description: ID of the playlist to reset (check your device's Playlist ID sensor)
+      required: true
+      selector:
+        text:
+      example: "1"

@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers import config_validation as cv, device_registry as dr, entity_registry as er
 from homeassistant.exceptions import ServiceValidationError
 
 from .api import TRMNLApi
@@ -158,6 +158,16 @@ DEVICE_SETUP_SCHEMA = vol.Schema({
     vol.Optional("force_setup"): cv.boolean,
 })
 
+# === Playlist Naming Services ===
+UPDATE_PLAYLIST_NAME_SCHEMA = vol.Schema({
+    vol.Required("playlist_id"): cv.string,
+    vol.Required("name"): cv.string,
+})
+
+RESET_PLAYLIST_NAME_SCHEMA = vol.Schema({
+    vol.Required("playlist_id"): cv.string,
+})
+
 
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up comprehensive TRMNL services for all Terminus API endpoints."""
@@ -188,6 +198,36 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(f"Device {device_id} is not a TRMNL device")
         
         return trmnl_identifier
+    
+    async def refresh_playlist_selects() -> None:
+        """Refresh all TRMNL playlist select entities after playlist changes."""
+        try:
+            entity_reg = er.async_get(hass)
+            # Find all TRMNL playlist select entities
+            for entity_entry in entity_reg.entities.values():
+                if (entity_entry.platform == DOMAIN and 
+                    entity_entry.unique_id and 
+                    entity_entry.unique_id.endswith("_playlist")):
+                    
+                    # Try to get the entity object through the component
+                    if "select" in hass.data.get("entity_components", {}):
+                        select_component = hass.data["entity_components"]["select"]
+                        entity_obj = None
+                        
+                        # Look through all select entities to find our TRMNL playlist selects
+                        for entity in select_component.entities:
+                            if (hasattr(entity, 'unique_id') and 
+                                entity.unique_id == entity_entry.unique_id):
+                                entity_obj = entity
+                                break
+                        
+                        if entity_obj and hasattr(entity_obj, 'async_refresh_playlists'):
+                            _LOGGER.debug("Refreshing playlist select entity: %s", entity_entry.entity_id)
+                            await entity_obj.async_refresh_playlists()
+                        else:
+                            _LOGGER.debug("Could not find entity object for %s", entity_entry.entity_id)
+        except Exception as e:
+            _LOGGER.warning("Error refreshing playlist select entities: %s", e)
     
     # === DEVICE MANAGEMENT SERVICES ===
     
@@ -497,6 +537,38 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(f"Failed to setup device {device_friendly_id}")
         _LOGGER.info("Successfully initiated setup for device %s", device_friendly_id)
     
+    # === PLAYLIST NAMING SERVICES ===
+    
+    async def handle_update_playlist_name(call: ServiceCall) -> None:
+        """Update a playlist name."""
+        api = get_api_instance()
+        playlist_id = call.data["playlist_id"]
+        new_name = call.data["name"]
+        
+        success = await api.update_playlist(playlist_id, {"label": new_name})
+        if not success:
+            raise ServiceValidationError(f"Failed to update playlist {playlist_id} name")
+        
+        # Refresh playlist select entities to show updated names
+        await refresh_playlist_selects()
+        
+        _LOGGER.info("Successfully updated playlist %s name to '%s'", playlist_id, new_name)
+    
+    async def handle_reset_playlist_name(call: ServiceCall) -> None:
+        """Reset a playlist name to default format."""
+        api = get_api_instance()
+        playlist_id = call.data["playlist_id"]
+        default_name = f"Playlist {playlist_id}"
+        
+        success = await api.update_playlist(playlist_id, {"label": default_name})
+        if not success:
+            raise ServiceValidationError(f"Failed to reset playlist {playlist_id} name")
+        
+        # Refresh playlist select entities to show updated names
+        await refresh_playlist_selects()
+        
+        _LOGGER.info("Successfully reset playlist %s name to '%s'", playlist_id, default_name)
+    
     # === REGISTER ALL SERVICES ===
     
     services = [
@@ -531,6 +603,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         # Setup
         ("device_setup", handle_device_setup, DEVICE_SETUP_SCHEMA),
+        
+        # Playlist Naming
+        ("update_playlist_name", handle_update_playlist_name, UPDATE_PLAYLIST_NAME_SCHEMA),
+        ("reset_playlist_name", handle_reset_playlist_name, RESET_PLAYLIST_NAME_SCHEMA),
     ]
     
     for service_name, handler, schema in services:
@@ -558,6 +634,8 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         "device_log",
         # Setup
         "device_setup",
+        # Playlist Naming
+        "update_playlist_name", "reset_playlist_name",
     ]
     
     for service in services:

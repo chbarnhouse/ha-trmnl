@@ -108,6 +108,12 @@ class TRMNLPlaylistSelect(TRMNLSelectBase):
         self._playlists = playlists or []
         
         # Build options from playlists
+        self._update_options()
+            
+        _LOGGER.info("Created playlist select for device %s with options: %s", device_id, self._attr_options)
+    
+    def _update_options(self):
+        """Update the available options and playlist mapping."""
         self._attr_options = []
         self._playlist_map = {}  # Maps display names to IDs
         
@@ -119,8 +125,17 @@ class TRMNLPlaylistSelect(TRMNLSelectBase):
                 self._playlist_map[playlist_name] = playlist_id
         else:
             self._attr_options = ["No playlists available"]
-            
-        _LOGGER.info("Created playlist select for device %s with options: %s", device_id, self._attr_options)
+    
+    async def async_refresh_playlists(self):
+        """Refresh the playlist options from the server."""
+        try:
+            _LOGGER.debug("Refreshing playlists for device %s", self._device_id)
+            self._playlists = await self._api.get_playlists()
+            self._update_options()
+            self.async_write_ha_state()
+            _LOGGER.info("Refreshed playlists for device %s: %s", self._device_id, self._attr_options)
+        except Exception as e:
+            _LOGGER.error("Error refreshing playlists for device %s: %s", self._device_id, e)
     
     @property
     def current_option(self) -> str:
