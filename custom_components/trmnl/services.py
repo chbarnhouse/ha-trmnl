@@ -668,29 +668,32 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         # Setup
         ("device_setup", handle_device_setup, DEVICE_SETUP_SCHEMA),
         
-        # Playlist Naming (will be replaced with dynamic schemas below)
-        ("update_playlist_name", handle_update_playlist_name, None),
-        ("reset_playlist_name", handle_reset_playlist_name, None),
+        # Playlist Naming - TEMPORARILY DISABLED due to Terminus API limitations
+        # The /api/playlists/{id} endpoints return HTTP 404, indicating these
+        # features are not supported by the current Terminus server
+        # ("update_playlist_name", handle_update_playlist_name, None),
+        # ("reset_playlist_name", handle_reset_playlist_name, None),
     ]
     
+    # Playlist naming services temporarily disabled - skip dynamic schema building
     # Get playlist data for dynamic schemas
-    try:
-        api = get_api_instance()
-        playlists = await api.get_playlists()
-        _LOGGER.debug("Retrieved %d playlists for service registration", len(playlists))
-    except Exception as e:
-        _LOGGER.warning("Could not get playlists for service registration: %s", e)
-        playlists = []
-    
-    # Build dynamic schemas for playlist naming services
-    dynamic_update_schema, dynamic_reset_schema = build_dynamic_playlist_schemas(playlists)
+    # try:
+    #     api = get_api_instance()
+    #     playlists = await api.get_playlists()
+    #     _LOGGER.debug("Retrieved %d playlists for service registration", len(playlists))
+    # except Exception as e:
+    #     _LOGGER.warning("Could not get playlists for service registration: %s", e)
+    #     playlists = []
+    # 
+    # # Build dynamic schemas for playlist naming services
+    # dynamic_update_schema, dynamic_reset_schema = build_dynamic_playlist_schemas(playlists)
     
     for service_name, handler, schema in services:
-        # Use dynamic schemas for playlist naming services
-        if service_name == "update_playlist_name":
-            schema = dynamic_update_schema
-        elif service_name == "reset_playlist_name":
-            schema = dynamic_reset_schema
+        # Playlist naming services are disabled, no special handling needed
+        # if service_name == "update_playlist_name":
+        #     schema = dynamic_update_schema
+        # elif service_name == "reset_playlist_name":
+        #     schema = dynamic_reset_schema
             
         hass.services.async_register(DOMAIN, service_name, handler, schema=schema)
         _LOGGER.debug("Registered service: %s", service_name)
