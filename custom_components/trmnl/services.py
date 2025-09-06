@@ -264,24 +264,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     def build_dynamic_playlist_schemas(playlists: list) -> tuple:
         """Build schemas with dynamic playlist options."""
-        # Create playlist options for validation
+        # Create playlist options for the select field
         playlist_options = []
         for playlist in playlists:
             playlist_id = str(playlist.get('id', ''))
             playlist_name = playlist.get('name', f'Playlist {playlist_id}')
+            # Use the name as the option value, but include ID for clarity
             playlist_options.append(f"{playlist_name} (ID: {playlist_id})")
         
         # Fallback options if no playlists available
         if not playlist_options:
-            playlist_options = ["1", "2", "3", "4", "5"]
+            playlist_options = ["Playlist 1 (ID: 1)", "Playlist 2 (ID: 2)", "Playlist 3 (ID: 3)"]
         
         UPDATE_PLAYLIST_NAME_SCHEMA = vol.Schema({
-            vol.Required("playlist_id"): cv.string,  # Keep as string to allow both formats
+            vol.Required("playlist_id"): vol.In(playlist_options),
             vol.Required("name"): cv.string,
         })
         
         RESET_PLAYLIST_NAME_SCHEMA = vol.Schema({
-            vol.Required("playlist_id"): cv.string,  # Keep as string to allow both formats
+            vol.Required("playlist_id"): vol.In(playlist_options),
         })
         
         return UPDATE_PLAYLIST_NAME_SCHEMA, RESET_PLAYLIST_NAME_SCHEMA
@@ -667,12 +668,30 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         # Setup
         ("device_setup", handle_device_setup, DEVICE_SETUP_SCHEMA),
         
-        # Playlist Naming
-        ("update_playlist_name", handle_update_playlist_name, UPDATE_PLAYLIST_NAME_SCHEMA),
-        ("reset_playlist_name", handle_reset_playlist_name, RESET_PLAYLIST_NAME_SCHEMA),
+        # Playlist Naming (will be replaced with dynamic schemas below)
+        ("update_playlist_name", handle_update_playlist_name, None),
+        ("reset_playlist_name", handle_reset_playlist_name, None),
     ]
     
+    # Get playlist data for dynamic schemas
+    try:
+        api = get_api_instance()
+        playlists = await api.get_playlists()
+        _LOGGER.debug("Retrieved %d playlists for service registration", len(playlists))
+    except Exception as e:
+        _LOGGER.warning("Could not get playlists for service registration: %s", e)
+        playlists = []
+    
+    # Build dynamic schemas for playlist naming services
+    dynamic_update_schema, dynamic_reset_schema = build_dynamic_playlist_schemas(playlists)
+    
     for service_name, handler, schema in services:
+        # Use dynamic schemas for playlist naming services
+        if service_name == "update_playlist_name":
+            schema = dynamic_update_schema
+        elif service_name == "reset_playlist_name":
+            schema = dynamic_reset_schema
+            
         hass.services.async_register(DOMAIN, service_name, handler, schema=schema)
         _LOGGER.debug("Registered service: %s", service_name)
     

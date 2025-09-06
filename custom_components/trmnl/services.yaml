@@ -725,12 +725,18 @@ update_playlist_name:
   description: Update the name/label of a playlist
   fields:
     playlist_id:
-      name: Playlist ID or Name
-      description: Enter the playlist ID (e.g., "1") or current playlist name from your device's Playlist sensor
+      name: Playlist
+      description: Select the playlist to rename
       required: true
       selector:
-        text:
-      example: "1"
+        select:
+          options:
+            - "Playlist 1 (ID: 1)"
+            - "Playlist 2 (ID: 2)"  
+            - "Playlist 3 (ID: 3)"
+            - "Playlist 4 (ID: 4)"
+            - "Playlist 5 (ID: 5)"
+          custom_value: true
     name:
       name: New Name
       description: New name for the playlist
@@ -744,9 +750,15 @@ reset_playlist_name:
   description: Reset a playlist name back to the default "Playlist X" format
   fields:
     playlist_id:
-      name: Playlist ID or Name
-      description: Enter the playlist ID (e.g., "1") or current playlist name from your device's Playlist sensor
+      name: Playlist
+      description: Select the playlist to reset to default name
       required: true
       selector:
-        text:
-      example: "1"
+        select:
+          options:
+            - "Playlist 1 (ID: 1)"
+            - "Playlist 2 (ID: 2)"
+            - "Playlist 3 (ID: 3)" 
+            - "Playlist 4 (ID: 4)"
+            - "Playlist 5 (ID: 5)"
+          custom_value: true
