@@ -1,7 +1,7 @@
 {
   "domain": "trmnl",
   "name": "TRMNL",
-  "version": "3.1.2",
+  "version": "3.2.0",
   "documentation": "https://github.com/chbarnhouse/ha-trmnl",
   "dependencies": [],
   "codeowners": ["@chbarnhouse"],
