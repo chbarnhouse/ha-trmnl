@@ -112,8 +112,43 @@ class TRMNLApi:
         """Get all playlists from Terminus."""
         _LOGGER.error("PLAYLIST DEBUG: Fetching playlists from %s", self.base_url)
         
-        # Try multiple possible endpoints
-        endpoints_to_try = ["/playlists", "/api/playlists"]
+        # Since devices contain playlist_id, let's extract unique playlists from device data
+        try:
+            devices = await self.get_devices()
+            _LOGGER.error("PLAYLIST DEBUG: Got %d devices to analyze for playlists", len(devices))
+            
+            unique_playlists = {}
+            for device in devices:
+                _LOGGER.error("PLAYLIST DEBUG: Device data: %s", device)
+                
+                playlist_id = device.get('playlist_id')
+                if playlist_id and playlist_id not in unique_playlists:
+                    # Create playlist entry from device data
+                    playlist_name = f"Playlist {playlist_id}"
+                    
+                    # Try to get more info from device attributes that might contain playlist info
+                    if 'playlist_name' in device:
+                        playlist_name = device['playlist_name']
+                    elif 'playlist_label' in device:
+                        playlist_name = device['playlist_label']
+                    
+                    unique_playlists[playlist_id] = {
+                        'id': playlist_id,
+                        'name': playlist_name
+                    }
+                    _LOGGER.error("PLAYLIST DEBUG: Found playlist ID %s (name: %s)", playlist_id, playlist_name)
+            
+            playlists_list = list(unique_playlists.values())
+            _LOGGER.error("PLAYLIST DEBUG: Extracted %d unique playlists from devices", len(playlists_list))
+            
+            if playlists_list:
+                return playlists_list
+            
+        except Exception as e:
+            _LOGGER.error("PLAYLIST DEBUG: Error extracting playlists from devices: %s", e)
+        
+        # Fallback: try API endpoints
+        endpoints_to_try = ["/playlists", "/api/playlists", "/admin/playlists", "/playlists.json"]
         
         for endpoint in endpoints_to_try:
             _LOGGER.error("PLAYLIST DEBUG: Trying endpoint %s", endpoint)
@@ -135,7 +170,7 @@ class TRMNLApi:
             else:
                 _LOGGER.error("PLAYLIST DEBUG: No response from %s", endpoint)
         
-        _LOGGER.error("PLAYLIST DEBUG: No playlists found from any endpoint")
+        _LOGGER.error("PLAYLIST DEBUG: No playlists found from any method")
         return []
 
     async def assign_device_to_playlist(self, device_id: str, playlist_id: str) -> bool:
