@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.exceptions import ServiceValidationError
 
 from .api import TRMNLApi
@@ -169,22 +169,42 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 return entry_data["api"]
         raise ServiceValidationError("No TRMNL integration configured")
     
+    def get_device_friendly_id(device_id: str) -> str:
+        """Convert HA device ID to TRMNL device friendly_id."""
+        device_registry = dr.async_get(hass)
+        device = device_registry.async_get(device_id)
+        
+        if not device:
+            raise ServiceValidationError(f"Device {device_id} not found")
+        
+        # Check if this is a TRMNL device
+        trmnl_identifier = None
+        for identifier in device.identifiers:
+            if identifier[0] == DOMAIN:
+                trmnl_identifier = identifier[1]
+                break
+        
+        if not trmnl_identifier:
+            raise ServiceValidationError(f"Device {device_id} is not a TRMNL device")
+        
+        return trmnl_identifier
+    
     # === DEVICE MANAGEMENT SERVICES ===
     
     async def handle_refresh_device(call: ServiceCall) -> None:
         """Refresh a specific device to check for new content."""
         api = get_api_instance()
-        device_id = call.data["device_id"]
+        device_friendly_id = get_device_friendly_id(call.data["device_id"])
         
-        success = await api.refresh_device(device_id)
+        success = await api.refresh_device(device_friendly_id)
         if not success:
-            raise ServiceValidationError(f"Failed to refresh device {device_id}")
-        _LOGGER.info("Successfully refreshed device %s", device_id)
+            raise ServiceValidationError(f"Failed to refresh device {device_friendly_id}")
+        _LOGGER.info("Successfully refreshed device %s", device_friendly_id)
     
     async def handle_update_device(call: ServiceCall) -> None:
         """Update device configuration settings."""
         api = get_api_instance()
-        device_id = call.data["device_id"]
+        device_friendly_id = get_device_friendly_id(call.data["device_id"])
         
         # Build update dictionary from call data
         updates = {}
@@ -205,10 +225,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if not updates:
             raise ServiceValidationError("No update fields provided")
         
-        success = await api.update_device(device_id, updates)
+        success = await api.update_device(device_friendly_id, updates)
         if not success:
-            raise ServiceValidationError(f"Failed to update device {device_id}")
-        _LOGGER.info("Successfully updated device %s", device_id)
+            raise ServiceValidationError(f"Failed to update device {device_friendly_id}")
+        _LOGGER.info("Successfully updated device %s", device_friendly_id)
     
     async def handle_create_device(call: ServiceCall) -> None:
         """Create a new device in Terminus."""
@@ -236,7 +256,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_update_display(call: ServiceCall) -> None:
         """Update device display content directly."""
         api = get_api_instance()
-        device_id = call.data["device_id"]
+        device_friendly_id = get_device_friendly_id(call.data["device_id"])
         
         display_data = {}
         if "content" in call.data:
@@ -252,10 +272,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if "preprocessed" in call.data:
             display_data["preprocessed"] = call.data["preprocessed"]
         
-        success = await api.update_display(device_id, display_data)
+        success = await api.update_display(device_friendly_id, display_data)
         if not success:
-            raise ServiceValidationError(f"Failed to update display for device {device_id}")
-        _LOGGER.info("Successfully updated display for device %s", device_id)
+            raise ServiceValidationError(f"Failed to update display for device {device_friendly_id}")
+        _LOGGER.info("Successfully updated display for device %s", device_friendly_id)
     
     # === SCREEN MANAGEMENT SERVICES ===
     
@@ -411,13 +431,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_assign_playlist(call: ServiceCall) -> None:
         """Assign a playlist to a device."""
         api = get_api_instance()
-        device_id = call.data["device_id"]
+        device_friendly_id = get_device_friendly_id(call.data["device_id"])
         playlist_id = call.data["playlist_id"]
         
-        success = await api.assign_device_to_playlist(device_id, playlist_id)
+        success = await api.assign_device_to_playlist(device_friendly_id, playlist_id)
         if not success:
-            raise ServiceValidationError(f"Failed to assign device {device_id} to playlist {playlist_id}")
-        _LOGGER.info("Successfully assigned device %s to playlist %s", device_id, playlist_id)
+            raise ServiceValidationError(f"Failed to assign device {device_friendly_id} to playlist {playlist_id}")
+        _LOGGER.info("Successfully assigned device %s to playlist %s", device_friendly_id, playlist_id)
     
     async def handle_playlist_add_screen(call: ServiceCall) -> None:
         """Add a screen to a playlist."""
@@ -447,7 +467,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_device_log(call: ServiceCall) -> None:
         """Send log entry for a device."""
         api = get_api_instance()
-        device_id = call.data["device_id"]
+        device_friendly_id = get_device_friendly_id(call.data["device_id"])
         
         log_data = {}
         if "log_level" in call.data:
@@ -459,23 +479,23 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if "additional_data" in call.data:
             log_data.update(call.data["additional_data"])
         
-        success = await api.send_device_log(device_id, log_data)
+        success = await api.send_device_log(device_friendly_id, log_data)
         if not success:
-            raise ServiceValidationError(f"Failed to send log for device {device_id}")
-        _LOGGER.info("Successfully sent log for device %s", device_id)
+            raise ServiceValidationError(f"Failed to send log for device {device_friendly_id}")
+        _LOGGER.info("Successfully sent log for device %s", device_friendly_id)
     
     # === SETUP/CONFIGURATION SERVICES ===
     
     async def handle_device_setup(call: ServiceCall) -> None:
         """Trigger device setup process."""
         api = get_api_instance()
-        device_id = call.data["device_id"]
+        device_friendly_id = get_device_friendly_id(call.data["device_id"])
         force_setup = call.data.get("force_setup", False)
         
-        result = await api.setup_device(device_id, force_setup)
+        result = await api.setup_device(device_friendly_id, force_setup)
         if not result:
-            raise ServiceValidationError(f"Failed to setup device {device_id}")
-        _LOGGER.info("Successfully initiated setup for device %s", device_id)
+            raise ServiceValidationError(f"Failed to setup device {device_friendly_id}")
+        _LOGGER.info("Successfully initiated setup for device %s", device_friendly_id)
     
     # === REGISTER ALL SERVICES ===
     

@@ -7,24 +7,24 @@ refresh_device:
   description: Trigger a device to check for new content and refresh its display
   fields:
     device_id:
-      name: Device ID
-      description: The friendly ID of the TRMNL device to refresh (e.g., "7V31CH")
+      name: TRMNL Device
+      description: Select the TRMNL device to refresh
       required: true
       selector:
-        text:
-      example: "7V31CH"
+        device:
+          integration: trmnl
 
 update_device:
   name: Update Device Configuration
   description: Update device settings like sleep schedule, refresh rate, and other configuration options
   fields:
     device_id:
-      name: Device ID
-      description: The friendly ID of the TRMNL device to update
+      name: TRMNL Device
+      description: Select the TRMNL device to update
       required: true
       selector:
-        text:
-      example: "7V31CH"
+        device:
+          integration: trmnl
     sleep_start:
       name: Sleep Start Time
       description: Time when device should enter sleep mode (24-hour format)
@@ -99,12 +99,12 @@ create_device:
       example: "28:37:2F:AA:B8:D0"
     model_id:
       name: Model ID
-      description: ID of the device model/type
+      description: ID of the device model/type (typically 1 for standard TRMNL devices)
       required: true
       selector:
         number:
           min: 1
-      example: 1
+      default: 1
     label:
       name: Device Label
       description: Friendly display name for the device
@@ -133,12 +133,12 @@ update_display:
   description: Directly update device display with images, URLs, or custom content
   fields:
     device_id:
-      name: Device ID
-      description: The friendly ID of the TRMNL device
+      name: TRMNL Device
+      description: Select the TRMNL device to update
       required: true
       selector:
-        text:
-      example: "7V31CH"
+        device:
+          integration: trmnl
     content:
       name: Text Content
       description: Text content to display
@@ -193,12 +193,12 @@ create_screen:
   fields:
     model_id:
       name: Model ID
-      description: Device model this screen is designed for
+      description: Device model ID this screen is designed for (check your TRMNL device's Model ID sensor for the correct value)
       required: true
       selector:
         number:
           min: 1
-      example: 1
+      default: 1
     name:
       name: Screen Name
       description: Internal name for the screen template
@@ -591,12 +591,12 @@ assign_playlist:
   description: Assign a playlist to a TRMNL device
   fields:
     device_id:
-      name: Device ID
-      description: The friendly ID of the TRMNL device
+      name: TRMNL Device
+      description: Select the TRMNL device to assign playlist to
       required: true
       selector:
-        text:
-      example: "7V31CH"
+        device:
+          integration: trmnl
     playlist_id:
       name: Playlist ID
       description: ID of the playlist to assign
@@ -657,12 +657,12 @@ device_log:
   description: Send a log entry to the Terminus server for a device
   fields:
     device_id:
-      name: Device ID
-      description: The friendly ID of the TRMNL device
+      name: TRMNL Device
+      description: Select the TRMNL device to send log for
       required: true
       selector:
-        text:
-      example: "7V31CH"
+        device:
+          integration: trmnl
     log_level:
       name: Log Level
       description: Severity level of the log entry
@@ -705,12 +705,12 @@ device_setup:
   description: Trigger the setup process for a device
   fields:
     device_id:
-      name: Device ID
-      description: The friendly ID of the TRMNL device
+      name: TRMNL Device
+      description: Select the TRMNL device to setup
       required: true
       selector:
-        text:
-      example: "7V31CH"
+        device:
+          integration: trmnl
     force_setup:
       name: Force Setup
       description: Force setup even if device is already configured
