@@ -560,6 +560,156 @@ class TRMNLApi:
             _LOGGER.error("Error sending log for device %s: %s", device_id, e)
             return False
 
+    # Display API - Direct device display updates
+    async def update_display(self, device_id: str, display_data: Dict) -> bool:
+        """Update device display content directly via Display API."""
+        try:
+            # Find device to get MAC address
+            devices = await self.get_devices()
+            mac_address = None
+            
+            for device in devices:
+                if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
+                    mac_address = device.get('mac_address')
+                    break
+            
+            if not mac_address:
+                _LOGGER.error("Could not find MAC address for device %s", device_id)
+                return False
+            
+            # Make request with MAC address as ID header (as per TRMNL API spec)
+            session = await self._get_session()
+            headers = {
+                'ID': mac_address,
+                'Content-Type': 'application/json'
+            }
+            
+            # Add base64 encoding header if requested
+            if display_data.get('base64_image'):
+                headers['BASE64'] = 'true'
+            
+            # POST display update
+            async with session.post(f"{self.base_url}/api/display", 
+                                  headers=headers, 
+                                  json=display_data) as response:
+                result = await self._handle_response(response, f"{self.base_url}/api/display")
+                if result:
+                    _LOGGER.info("Updated display for device %s (MAC: %s)", device_id, mac_address)
+                    return True
+                return False
+                
+        except Exception as e:
+            _LOGGER.error("Error updating display for device %s: %s", device_id, e)
+            return False
+    
+    # Playlist Management Methods
+    async def create_playlist(self, playlist_data: Dict) -> Optional[Dict]:
+        """Create a new playlist in Terminus."""
+        try:
+            _LOGGER.info("Creating playlist: %s", playlist_data.get('name', 'unknown'))
+            result = await self._make_request("/api/playlists", method="POST", data={"playlist": playlist_data})
+            if result:
+                _LOGGER.info("Successfully created playlist")
+                return result.get("data")
+            return None
+        except Exception as e:
+            _LOGGER.error("Error creating playlist: %s", e)
+            return None
+
+    async def update_playlist(self, playlist_id: str, playlist_data: Dict) -> bool:
+        """Update a playlist in Terminus."""
+        try:
+            _LOGGER.info("Updating playlist %s", playlist_id)
+            result = await self._make_request(f"/api/playlists/{playlist_id}", method="PATCH", data={"playlist": playlist_data})
+            if result:
+                _LOGGER.info("Successfully updated playlist %s", playlist_id)
+                return True
+            return False
+        except Exception as e:
+            _LOGGER.error("Error updating playlist %s: %s", playlist_id, e)
+            return False
+
+    async def delete_playlist(self, playlist_id: str) -> bool:
+        """Delete a playlist from Terminus."""
+        try:
+            _LOGGER.info("Deleting playlist %s", playlist_id)
+            result = await self._make_request(f"/api/playlists/{playlist_id}", method="DELETE")
+            if result:
+                _LOGGER.info("Successfully deleted playlist %s", playlist_id)
+                return True
+            return False
+        except Exception as e:
+            _LOGGER.error("Error deleting playlist %s: %s", playlist_id, e)
+            return False
+
+    async def add_screen_to_playlist(self, playlist_id: str, screen_id: str, position: Optional[int] = None) -> bool:
+        """Add a screen to a playlist at optional position."""
+        try:
+            _LOGGER.info("Adding screen %s to playlist %s", screen_id, playlist_id)
+            data = {"screen_id": screen_id}
+            if position is not None:
+                data["position"] = position
+            
+            result = await self._make_request(f"/api/playlists/{playlist_id}/screens", method="POST", data=data)
+            if result:
+                _LOGGER.info("Successfully added screen %s to playlist %s", screen_id, playlist_id)
+                return True
+            return False
+        except Exception as e:
+            _LOGGER.error("Error adding screen %s to playlist %s: %s", screen_id, playlist_id, e)
+            return False
+
+    async def remove_screen_from_playlist(self, playlist_id: str, screen_id: str) -> bool:
+        """Remove a screen from a playlist."""
+        try:
+            _LOGGER.info("Removing screen %s from playlist %s", screen_id, playlist_id)
+            result = await self._make_request(f"/api/playlists/{playlist_id}/screens/{screen_id}", method="DELETE")
+            if result:
+                _LOGGER.info("Successfully removed screen %s from playlist %s", screen_id, playlist_id)
+                return True
+            return False
+        except Exception as e:
+            _LOGGER.error("Error removing screen %s from playlist %s: %s", screen_id, playlist_id, e)
+            return False
+
+    # Log Management
+    async def send_device_log(self, device_id: str, log_data: Dict) -> bool:
+        """Send log data from a device."""
+        try:
+            # Find device to get MAC address for proper log correlation
+            devices = await self.get_devices()
+            mac_address = None
+            
+            for device in devices:
+                if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
+                    mac_address = device.get('mac_address')
+                    break
+            
+            # Enhance log data with device info
+            enhanced_log = {
+                "device_id": device_id,
+                "timestamp": log_data.get("timestamp"),
+                "level": log_data.get("level", "info"),
+                "message": log_data.get("message", ""),
+                "component": log_data.get("component", "home_assistant"),
+            }
+            
+            if mac_address:
+                enhanced_log["mac_address"] = mac_address
+            
+            # Add any additional data
+            if "additional_data" in log_data:
+                enhanced_log.update(log_data["additional_data"])
+            
+            _LOGGER.debug("Sending log data for device %s", device_id)
+            result = await self._make_request("/api/log", method="POST", data=enhanced_log)
+            if result:
+                return True
+            return False
+        except Exception as e:
+            _LOGGER.error("Error sending log for device %s: %s", device_id, e)
+            return False
+
     # Setup and Configuration
     async def get_setup_info(self) -> Optional[Dict]:
         """Get setup information from Terminus."""
@@ -571,4 +721,42 @@ class TRMNLApi:
             return None
         except Exception as e:
             _LOGGER.error("Error getting setup info: %s", e)
+            return None
+
+    async def setup_device(self, device_id: str, force_setup: bool = False) -> Optional[Dict]:
+        """Trigger device setup process."""
+        try:
+            # Find device to get MAC address
+            devices = await self.get_devices()
+            mac_address = None
+            
+            for device in devices:
+                if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
+                    mac_address = device.get('mac_address')
+                    break
+            
+            if not mac_address:
+                _LOGGER.error("Could not find MAC address for device %s", device_id)
+                return None
+            
+            # Make setup request with MAC address as ID header
+            session = await self._get_session()
+            headers = {
+                'ID': mac_address,
+                'Content-Type': 'application/json'
+            }
+            
+            setup_data = {"force": force_setup}
+            
+            async with session.post(f"{self.base_url}/api/setup", 
+                                  headers=headers, 
+                                  json=setup_data) as response:
+                result = await self._handle_response(response, f"{self.base_url}/api/setup")
+                if result:
+                    _LOGGER.info("Setup initiated for device %s (MAC: %s)", device_id, mac_address)
+                    return result
+                return None
+                
+        except Exception as e:
+            _LOGGER.error("Error setting up device %s: %s", device_id, e)
             return None
