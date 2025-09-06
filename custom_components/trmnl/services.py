@@ -256,7 +256,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_update_display(call: ServiceCall) -> None:
         """Update device display content directly."""
         api = get_api_instance()
+        
+        # Debug logging
+        _LOGGER.error("SERVICE DEBUG: Raw call data: %s", call.data)
+        _LOGGER.error("SERVICE DEBUG: device_id from call: %s (type: %s)", call.data.get("device_id"), type(call.data.get("device_id")))
+        
         device_friendly_id = get_device_friendly_id(call.data["device_id"])
+        _LOGGER.error("SERVICE DEBUG: Converted friendly_id: %s", device_friendly_id)
         
         display_data = {}
         if "content" in call.data:

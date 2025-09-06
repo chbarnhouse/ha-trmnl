@@ -564,17 +564,23 @@ class TRMNLApi:
     async def update_display(self, device_id: str, display_data: Dict) -> bool:
         """Update device display content directly via Display API."""
         try:
+            _LOGGER.error("API DEBUG: update_display called with device_id=%s, display_data=%s", device_id, display_data)
+            
             # Find device to get MAC address
             devices = await self.get_devices()
+            _LOGGER.error("API DEBUG: Found %d devices: %s", len(devices), devices)
+            
             mac_address = None
             
             for device in devices:
+                _LOGGER.error("API DEBUG: Checking device: friendly_id=%s, id=%s", device.get('friendly_id'), device.get('id'))
                 if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
                     mac_address = device.get('mac_address')
+                    _LOGGER.error("API DEBUG: Found matching device with MAC: %s", mac_address)
                     break
             
             if not mac_address:
-                _LOGGER.error("Could not find MAC address for device %s", device_id)
+                _LOGGER.error("Could not find MAC address for device %s in devices: %s", device_id, [d.get('friendly_id') for d in devices])
                 return False
             
             # Make request with MAC address as ID header (as per TRMNL API spec)
