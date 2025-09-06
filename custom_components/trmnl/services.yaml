@@ -1,186 +1,719 @@
-create_dashboard_screen:
-  name: Create Dashboard Screen
-  description: Create a TRMNL screen from a Home Assistant dashboard
-  fields:
-    device:
-      name: TRMNL Device
-      description: Select your TRMNL device
-      required: true
-      selector:
-        device:
-          integration: trmnl
-    dashboard_url:
-      name: Dashboard URL
-      description: Home Assistant dashboard path (e.g., "/lovelace/home")
-      required: true
-      example: "/lovelace/home"
-      selector:
-        text:
-    screen_name:
-      name: Screen Name
-      description: Optional name for the screen
-      required: false
-      example: "Home Dashboard"
-      selector:
-        text:
-    margins:
-      name: Margins
-      description: Margins around the content in pixels
-      required: false
-      selector:
-        object:
-      default:
-        top: 20
-        right: 20
-        bottom: 20
-        left: 20
-    alignment:
-      name: Alignment
-      description: Content alignment on the screen
-      required: false
-      default: "center"
-      selector:
-        select:
-          options:
-            - "left"
-            - "center"
-            - "right"
-    zoom:
-      name: Zoom Level
-      description: Scale factor for the dashboard (0.1 to 3.0)
-      required: false
-      default: 1.0
-      selector:
-        number:
-          min: 0.1
-          max: 3.0
-          step: 0.1
-    wait_time:
-      name: Wait Time
-      description: Time to wait before taking screenshot (milliseconds)
-      required: false
-      default: 2000
-      selector:
-        number:
-          min: 0
-          max: 10000
-          step: 500
-    selector:
-      name: CSS Selector
-      description: Optional CSS selector to screenshot specific element
-      required: false
-      example: ".panel-view"
-      selector:
-        text:
-    orientation:
-      name: Screen Orientation
-      description: Display orientation for the screen
-      required: false
-      default: "landscape"
-      selector:
-        select:
-          options:
-            - "landscape"
-            - "landscape_inverted"
-            - "portrait"
-            - "portrait_inverted"
+# TRMNL Home Assistant Services UI Configuration
 
-update_dashboard_screen:
-  name: Update Dashboard Screen
-  description: Update an existing TRMNL screen with new dashboard content
+# === DEVICE MANAGEMENT SERVICES ===
+
+refresh_device:
+  name: Refresh Device
+  description: Trigger a device to check for new content and refresh its display
   fields:
-    screen_id:
-      name: Screen ID
-      description: ID of the screen to update
+    device_id:
+      name: Device ID
+      description: The friendly ID of the TRMNL device to refresh (e.g., "7V31CH")
       required: true
-      example: 123
+      selector:
+        text:
+      example: "7V31CH"
+
+update_device:
+  name: Update Device Configuration
+  description: Update device settings like sleep schedule, refresh rate, and other configuration options
+  fields:
+    device_id:
+      name: Device ID
+      description: The friendly ID of the TRMNL device to update
+      required: true
+      selector:
+        text:
+      example: "7V31CH"
+    sleep_start:
+      name: Sleep Start Time
+      description: Time when device should enter sleep mode (24-hour format)
+      required: false
+      selector:
+        time:
+      example: "22:00"
+    sleep_stop:
+      name: Sleep Stop Time
+      description: Time when device should wake from sleep mode (24-hour format)
+      required: false
+      selector:
+        time:
+      example: "07:00"
+    refresh_rate:
+      name: Refresh Rate
+      description: How often the device should check for new content (in minutes)
+      required: false
       selector:
         number:
           min: 1
-    dashboard_url:
-      name: Dashboard URL
-      description: Home Assistant dashboard path
-      required: true
-      example: "/lovelace/updated"
-      selector:
-        text:
-    margins:
-      name: Margins
-      description: Margins around the content in pixels
+          max: 1440
+          unit_of_measurement: "minutes"
+      example: 15
+    image_timeout:
+      name: Image Timeout
+      description: Timeout for image downloads (in seconds)
       required: false
-      selector:
-        object:
-      default:
-        top: 20
-        right: 20
-        bottom: 20
-        left: 20
-    alignment:
-      name: Alignment
-      description: Content alignment on the screen
-      required: false
-      default: "center"
-      selector:
-        select:
-          options:
-            - "left"
-            - "center"
-            - "right"
-    zoom:
-      name: Zoom Level
-      description: Scale factor for the dashboard
-      required: false
-      default: 1.0
-      selector:
-        number:
-          min: 0.1
-          max: 3.0
-          step: 0.1
-    wait_time:
-      name: Wait Time
-      description: Time to wait before taking screenshot (milliseconds)
-      required: false
-      default: 2000
       selector:
         number:
           min: 0
-          max: 10000
-          step: 500
-    selector:
-      name: CSS Selector
-      description: Optional CSS selector to screenshot specific element
+          max: 300
+          unit_of_measurement: "seconds"
+      example: 30
+    firmware_update:
+      name: Allow Firmware Updates
+      description: Whether the device should automatically update firmware
+      required: false
+      selector:
+        boolean:
+    label:
+      name: Device Label
+      description: Friendly name for the device
       required: false
       selector:
         text:
+      example: "Kitchen Display"
+    proxy:
+      name: Use Proxy
+      description: Whether the device should use a proxy for connections
+      required: false
+      selector:
+        boolean:
 
-create_dashboard_collection:
-  name: Create Dashboard Collection
-  description: Create multiple TRMNL screens from different dashboards
+create_device:
+  name: Create New Device
+  description: Register a new TRMNL device with the Terminus server
   fields:
-    device:
-      name: TRMNL Device
-      description: Select your TRMNL device
+    friendly_id:
+      name: Friendly ID
+      description: Unique friendly identifier for the device
       required: true
       selector:
-        device:
-          integration: trmnl
-    dashboards:
-      name: Dashboards
-      description: List of dashboards to create screens from
+        text:
+      example: "7V31CH"
+    mac_address:
+      name: MAC Address
+      description: Network MAC address of the device
       required: true
+      selector:
+        text:
+      example: "28:37:2F:AA:B8:D0"
+    model_id:
+      name: Model ID
+      description: ID of the device model/type
+      required: true
+      selector:
+        number:
+          min: 1
+      example: 1
+    label:
+      name: Device Label
+      description: Friendly display name for the device
+      required: false
+      selector:
+        text:
+      example: "Kitchen Display"
+    api_key:
+      name: API Key
+      description: Device-specific API key (if known)
+      required: false
+      selector:
+        text:
+    playlist_id:
+      name: Initial Playlist ID
+      description: ID of playlist to assign to the new device
+      required: false
+      selector:
+        number:
+          min: 1
+
+# === DISPLAY API SERVICES ===
+
+update_display:
+  name: Update Display Content
+  description: Directly update device display with images, URLs, or custom content
+  fields:
+    device_id:
+      name: Device ID
+      description: The friendly ID of the TRMNL device
+      required: true
+      selector:
+        text:
+      example: "7V31CH"
+    content:
+      name: Text Content
+      description: Text content to display
+      required: false
+      selector:
+        text:
+          multiline: true
+      example: "Hello World!"
+    uri:
+      name: Content URI
+      description: URI/URL pointing to content to display
+      required: false
+      selector:
+        text:
+      example: "https://example.com/api/content"
+    image_url:
+      name: Image URL
+      description: Direct URL to an image to display
+      required: false
+      selector:
+        text:
+      example: "https://example.com/image.png"
+    base64_image:
+      name: Base64 Image
+      description: Base64 encoded image data
+      required: false
+      selector:
+        text:
+          multiline: true
+    timeout:
+      name: Display Timeout
+      description: How long to display this content (seconds)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 3600
+          unit_of_measurement: "seconds"
+      example: 60
+    preprocessed:
+      name: Content is Preprocessed
+      description: Whether the content is already processed and ready for display
+      required: false
+      selector:
+        boolean:
+
+# === SCREEN MANAGEMENT SERVICES ===
+
+create_screen:
+  name: Create Screen Template
+  description: Create a new screen template for displaying content
+  fields:
+    model_id:
+      name: Model ID
+      description: Device model this screen is designed for
+      required: true
+      selector:
+        number:
+          min: 1
+      example: 1
+    name:
+      name: Screen Name
+      description: Internal name for the screen template
+      required: true
+      selector:
+        text:
+      example: "weather_display"
+    label:
+      name: Screen Label
+      description: Display name for the screen
+      required: true
+      selector:
+        text:
+      example: "Current Weather"
+    content:
+      name: Text Content
+      description: Text content for the screen
+      required: false
+      selector:
+        text:
+          multiline: true
+    uri:
+      name: Content URI
+      description: URI/URL for dynamic content
+      required: false
+      selector:
+        text:
+      example: "https://weather.api/current"
+    image_url:
+      name: Image URL
+      description: URL to an image for this screen
+      required: false
+      selector:
+        text:
+      example: "https://example.com/weather.png"
+    data:
+      name: Additional Data
+      description: JSON object with additional screen configuration
+      required: false
       selector:
         object:
-      example:
-        - url: "/lovelace/home"
-          name: "Home Dashboard"
-          zoom: 0.8
-        - url: "/lovelace/energy"
-          name: "Energy Dashboard"
-          alignment: "left"
-    create_playlist:
-      name: Create Playlist
-      description: Whether to create a playlist from the screens
+    preprocessed:
+      name: Content is Preprocessed
+      description: Whether the content is ready for display
       required: false
-      default: true
+      selector:
+        boolean:
+    timeout:
+      name: Display Timeout
+      description: How long to show this screen (seconds)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 3600
+          unit_of_measurement: "seconds"
+
+update_screen:
+  name: Update Screen Template
+  description: Modify an existing screen template
+  fields:
+    screen_id:
+      name: Screen ID
+      description: ID of the screen template to update
+      required: true
+      selector:
+        text:
+      example: "123"
+    name:
+      name: Screen Name
+      description: Internal name for the screen template
+      required: false
+      selector:
+        text:
+    label:
+      name: Screen Label
+      description: Display name for the screen
+      required: false
+      selector:
+        text:
+    content:
+      name: Text Content
+      description: Text content for the screen
+      required: false
+      selector:
+        text:
+          multiline: true
+    uri:
+      name: Content URI
+      description: URI/URL for dynamic content
+      required: false
+      selector:
+        text:
+    image_url:
+      name: Image URL
+      description: URL to an image for this screen
+      required: false
+      selector:
+        text:
+    data:
+      name: Additional Data
+      description: JSON object with additional screen configuration
+      required: false
+      selector:
+        object:
+    preprocessed:
+      name: Content is Preprocessed
+      description: Whether the content is ready for display
+      required: false
+      selector:
+        boolean:
+    timeout:
+      name: Display Timeout
+      description: How long to show this screen (seconds)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 3600
+          unit_of_measurement: "seconds"
+
+delete_screen:
+  name: Delete Screen Template
+  description: Remove a screen template from the system
+  fields:
+    screen_id:
+      name: Screen ID
+      description: ID of the screen template to delete
+      required: true
+      selector:
+        text:
+      example: "123"
+
+# === MODEL MANAGEMENT SERVICES ===
+
+create_model:
+  name: Create Device Model
+  description: Define a new device model with specifications
+  fields:
+    name:
+      name: Model Name
+      description: Internal name for the device model
+      required: true
+      selector:
+        text:
+      example: "trmnl_7inch"
+    label:
+      name: Model Label
+      description: Display name for the model
+      required: false
+      selector:
+        text:
+      example: "TRMNL 7-inch E-Paper"
+    description:
+      name: Description
+      description: Detailed description of the device model
+      required: false
+      selector:
+        text:
+          multiline: true
+    width:
+      name: Display Width
+      description: Screen width in pixels
+      required: false
+      selector:
+        number:
+          min: 1
+          unit_of_measurement: "pixels"
+      example: 800
+    height:
+      name: Display Height
+      description: Screen height in pixels
+      required: false
+      selector:
+        number:
+          min: 1
+          unit_of_measurement: "pixels"
+      example: 480
+    bit_depth:
+      name: Bit Depth
+      description: Color bit depth of the display
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 32
+      example: 1
+    color_mode:
+      name: Color Mode
+      description: Display color mode (e.g., monochrome, color)
+      required: false
+      selector:
+        select:
+          options:
+            - "monochrome"
+            - "grayscale"
+            - "color"
+
+update_model:
+  name: Update Device Model
+  description: Modify an existing device model definition
+  fields:
+    model_id:
+      name: Model ID
+      description: ID of the model to update
+      required: true
+      selector:
+        text:
+      example: "1"
+    name:
+      name: Model Name
+      description: Internal name for the device model
+      required: false
+      selector:
+        text:
+    label:
+      name: Model Label
+      description: Display name for the model
+      required: false
+      selector:
+        text:
+    description:
+      name: Description
+      description: Detailed description of the device model
+      required: false
+      selector:
+        text:
+          multiline: true
+    width:
+      name: Display Width
+      description: Screen width in pixels
+      required: false
+      selector:
+        number:
+          min: 1
+          unit_of_measurement: "pixels"
+    height:
+      name: Display Height
+      description: Screen height in pixels
+      required: false
+      selector:
+        number:
+          min: 1
+          unit_of_measurement: "pixels"
+    bit_depth:
+      name: Bit Depth
+      description: Color bit depth of the display
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 32
+    color_mode:
+      name: Color Mode
+      description: Display color mode
+      required: false
+      selector:
+        select:
+          options:
+            - "monochrome"
+            - "grayscale"
+            - "color"
+
+delete_model:
+  name: Delete Device Model
+  description: Remove a device model definition
+  fields:
+    model_id:
+      name: Model ID
+      description: ID of the model to delete
+      required: true
+      selector:
+        text:
+      example: "1"
+
+# === PLAYLIST MANAGEMENT SERVICES ===
+
+create_playlist:
+  name: Create Playlist
+  description: Create a new playlist for organizing screens
+  fields:
+    name:
+      name: Playlist Name
+      description: Internal name for the playlist
+      required: true
+      selector:
+        text:
+      example: "morning_routine"
+    label:
+      name: Playlist Label
+      description: Display name for the playlist
+      required: false
+      selector:
+        text:
+      example: "Morning Routine"
+    description:
+      name: Description
+      description: Description of the playlist purpose
+      required: false
+      selector:
+        text:
+          multiline: true
+    screen_ids:
+      name: Screen IDs
+      description: List of screen IDs to include in this playlist
+      required: false
+      selector:
+        object:
+    auto_advance:
+      name: Auto Advance
+      description: Whether to automatically advance between screens
+      required: false
+      selector:
+        boolean:
+    advance_interval:
+      name: Advance Interval
+      description: Time between screen changes (seconds)
+      required: false
+      selector:
+        number:
+          min: 1
+          unit_of_measurement: "seconds"
+      example: 300
+
+update_playlist:
+  name: Update Playlist
+  description: Modify an existing playlist
+  fields:
+    playlist_id:
+      name: Playlist ID
+      description: ID of the playlist to update
+      required: true
+      selector:
+        text:
+      example: "1"
+    name:
+      name: Playlist Name
+      description: Internal name for the playlist
+      required: false
+      selector:
+        text:
+    label:
+      name: Playlist Label
+      description: Display name for the playlist
+      required: false
+      selector:
+        text:
+    description:
+      name: Description
+      description: Description of the playlist purpose
+      required: false
+      selector:
+        text:
+          multiline: true
+    screen_ids:
+      name: Screen IDs
+      description: List of screen IDs to include in this playlist
+      required: false
+      selector:
+        object:
+    auto_advance:
+      name: Auto Advance
+      description: Whether to automatically advance between screens
+      required: false
+      selector:
+        boolean:
+    advance_interval:
+      name: Advance Interval
+      description: Time between screen changes (seconds)
+      required: false
+      selector:
+        number:
+          min: 1
+          unit_of_measurement: "seconds"
+
+delete_playlist:
+  name: Delete Playlist
+  description: Remove a playlist from the system
+  fields:
+    playlist_id:
+      name: Playlist ID
+      description: ID of the playlist to delete
+      required: true
+      selector:
+        text:
+      example: "1"
+
+assign_playlist:
+  name: Assign Playlist to Device
+  description: Assign a playlist to a TRMNL device
+  fields:
+    device_id:
+      name: Device ID
+      description: The friendly ID of the TRMNL device
+      required: true
+      selector:
+        text:
+      example: "7V31CH"
+    playlist_id:
+      name: Playlist ID
+      description: ID of the playlist to assign
+      required: true
+      selector:
+        text:
+      example: "1"
+
+playlist_add_screen:
+  name: Add Screen to Playlist
+  description: Add a screen to an existing playlist
+  fields:
+    playlist_id:
+      name: Playlist ID
+      description: ID of the playlist
+      required: true
+      selector:
+        text:
+      example: "1"
+    screen_id:
+      name: Screen ID
+      description: ID of the screen to add
+      required: true
+      selector:
+        text:
+      example: "123"
+    position:
+      name: Position
+      description: Position in playlist (optional, will add at end if not specified)
+      required: false
+      selector:
+        number:
+          min: 0
+
+playlist_remove_screen:
+  name: Remove Screen from Playlist
+  description: Remove a screen from a playlist
+  fields:
+    playlist_id:
+      name: Playlist ID
+      description: ID of the playlist
+      required: true
+      selector:
+        text:
+      example: "1"
+    screen_id:
+      name: Screen ID
+      description: ID of the screen to remove
+      required: true
+      selector:
+        text:
+      example: "123"
+
+# === LOG MANAGEMENT SERVICES ===
+
+device_log:
+  name: Send Device Log
+  description: Send a log entry to the Terminus server for a device
+  fields:
+    device_id:
+      name: Device ID
+      description: The friendly ID of the TRMNL device
+      required: true
+      selector:
+        text:
+      example: "7V31CH"
+    log_level:
+      name: Log Level
+      description: Severity level of the log entry
+      required: false
+      selector:
+        select:
+          options:
+            - "debug"
+            - "info"
+            - "warning"
+            - "error"
+            - "critical"
+      example: "info"
+    message:
+      name: Log Message
+      description: The log message content
+      required: false
+      selector:
+        text:
+          multiline: true
+      example: "Device status update from Home Assistant"
+    component:
+      name: Component
+      description: Component or system generating the log
+      required: false
+      selector:
+        text:
+      example: "home_assistant"
+    additional_data:
+      name: Additional Data
+      description: Extra data to include with the log entry
+      required: false
+      selector:
+        object:
+
+# === SETUP/CONFIGURATION SERVICES ===
+
+device_setup:
+  name: Device Setup
+  description: Trigger the setup process for a device
+  fields:
+    device_id:
+      name: Device ID
+      description: The friendly ID of the TRMNL device
+      required: true
+      selector:
+        text:
+      example: "7V31CH"
+    force_setup:
+      name: Force Setup
+      description: Force setup even if device is already configured
+      required: false
       selector:
         boolean:
