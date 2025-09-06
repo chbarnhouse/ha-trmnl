@@ -1,6 +1,7 @@
 """API client for TRMNL Terminus server."""
 import asyncio
 import logging
+from datetime import datetime
 from typing import Dict, List, Optional
 import aiohttp
 
@@ -560,48 +561,78 @@ class TRMNLApi:
             _LOGGER.error("Error sending log for device %s: %s", device_id, e)
             return False
 
-    # Display API - Direct device display updates
+    # Display API - Alternative implementation using screen creation
     async def update_display(self, device_id: str, display_data: Dict) -> bool:
-        """Update device display content directly via Display API."""
+        """Update device display content by creating/updating a temporary screen."""
         try:
-            _LOGGER.error("API DEBUG: update_display called with device_id=%s, display_data=%s", device_id, display_data)
+            _LOGGER.info("Display update requested for device %s with data: %s", device_id, display_data)
             
-            # Find device to get MAC address
+            # The /api/display endpoint is not available in this Terminus version
+            # Instead, we'll create/update a screen and assign it to the device
+            
+            # Find device to get model_id and playlist_id
             devices = await self.get_devices()
-            _LOGGER.error("API DEBUG: Found %d devices: %s", len(devices), devices)
-            
-            mac_address = None
+            target_device = None
             
             for device in devices:
-                _LOGGER.error("API DEBUG: Checking device: friendly_id=%s, id=%s", device.get('friendly_id'), device.get('id'))
                 if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
-                    mac_address = device.get('mac_address')
-                    _LOGGER.error("API DEBUG: Found matching device with MAC: %s", mac_address)
+                    target_device = device
                     break
             
-            if not mac_address:
-                _LOGGER.error("Could not find MAC address for device %s in devices: %s", device_id, [d.get('friendly_id') for d in devices])
+            if not target_device:
+                _LOGGER.error("Could not find device %s", device_id)
                 return False
             
-            # Make request with MAC address as ID header (as per TRMNL API spec)
-            session = await self._get_session()
-            headers = {
-                'ID': mac_address,
-                'Content-Type': 'application/json'
+            model_id = target_device.get('model_id', 1)
+            
+            # Create a temporary screen with the display content
+            screen_data = {
+                "model_id": model_id,
+                "name": f"ha_temp_{device_id}_{int(datetime.now().timestamp())}",
+                "label": f"HA Display Update {device_id}"
             }
             
-            # Add base64 encoding header if requested
-            if display_data.get('base64_image'):
-                headers['BASE64'] = 'true'
+            # Add content from display_data
+            if "content" in display_data:
+                screen_data["content"] = display_data["content"]
+            if "uri" in display_data:
+                screen_data["uri"] = display_data["uri"]
+            if "image_url" in display_data:
+                screen_data["image_url"] = display_data["image_url"]
+            if "preprocessed" in display_data:
+                screen_data["preprocessed"] = display_data["preprocessed"]
             
-            # POST display update
-            async with session.post(f"{self.base_url}/api/display", 
-                                  headers=headers, 
-                                  json=display_data) as response:
-                result = await self._handle_response(response, f"{self.base_url}/api/display")
-                if result:
-                    _LOGGER.info("Updated display for device %s (MAC: %s)", device_id, mac_address)
-                    return True
+            # Create the screen
+            screen_result = await self.create_screen(screen_data)
+            if not screen_result:
+                _LOGGER.error("Failed to create temporary screen for display update")
+                return False
+            
+            screen_id = screen_result.get('id')
+            _LOGGER.info("Created temporary screen %s for display update", screen_id)
+            
+            # Create a temporary playlist with just this screen
+            playlist_data = {
+                "name": f"ha_temp_playlist_{device_id}_{int(datetime.now().timestamp())}",
+                "label": f"HA Temp Playlist {device_id}",
+                "screen_ids": [str(screen_id)]
+            }
+            
+            playlist_result = await self.create_playlist(playlist_data)
+            if not playlist_result:
+                _LOGGER.error("Failed to create temporary playlist for display update")
+                return False
+            
+            playlist_id = playlist_result.get('id')
+            _LOGGER.info("Created temporary playlist %s for display update", playlist_id)
+            
+            # Assign the playlist to the device
+            success = await self.assign_device_to_playlist(device_id, str(playlist_id))
+            if success:
+                _LOGGER.info("Successfully updated display for device %s via temporary screen/playlist", device_id)
+                return True
+            else:
+                _LOGGER.error("Failed to assign temporary playlist to device")
                 return False
                 
         except Exception as e:

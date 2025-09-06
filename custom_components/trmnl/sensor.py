@@ -1,5 +1,6 @@
 """Support for TRMNL sensors."""
 import logging
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
@@ -11,7 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, SIGNAL_STRENGTH_DECIBELS_MILLIWATT, UnitOfElectricPotential
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 
 from .api import TRMNLApi
 from .const import DOMAIN
@@ -265,9 +266,17 @@ class TRMNLLastUpdateSensor(TRMNLSensorBase):
         self._attr_icon = "mdi:clock-outline"
     
     @property
-    def native_value(self) -> Optional[str]:
+    def native_value(self) -> Optional[datetime]:
         """Return last update timestamp."""
-        return self._device.get('updated_at')
+        timestamp_str = self._device.get('updated_at')
+        if timestamp_str:
+            try:
+                # Parse ISO format timestamp
+                return datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            except ValueError:
+                _LOGGER.warning("Could not parse timestamp: %s", timestamp_str)
+                return None
+        return None
 
 
 class TRMNLMacAddressSensor(TRMNLSensorBase):
@@ -279,7 +288,7 @@ class TRMNLMacAddressSensor(TRMNLSensorBase):
         self._attr_name = "MAC Address"
         self._attr_unique_id = f"{device_id}_mac_address"
         self._attr_icon = "mdi:network"
-        self._attr_entity_category = "diagnostic"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
     
     @property
     def native_value(self) -> Optional[str]:
@@ -296,7 +305,7 @@ class TRMNLApiKeySensor(TRMNLSensorBase):
         self._attr_name = "API Key"
         self._attr_unique_id = f"{device_id}_api_key"
         self._attr_icon = "mdi:key"
-        self._attr_entity_category = "diagnostic"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
     
     @property
     def native_value(self) -> Optional[str]:
@@ -319,7 +328,7 @@ class TRMNLWidthSensor(TRMNLSensorBase):
         self._attr_native_unit_of_measurement = "pixels"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:monitor-screenshot"
-        self._attr_entity_category = "diagnostic"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
     
     @property
     def native_value(self) -> Optional[int]:
@@ -338,7 +347,7 @@ class TRMNLHeightSensor(TRMNLSensorBase):
         self._attr_native_unit_of_measurement = "pixels"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:monitor-screenshot"
-        self._attr_entity_category = "diagnostic"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
     
     @property
     def native_value(self) -> Optional[int]:
@@ -355,7 +364,7 @@ class TRMNLModelIdSensor(TRMNLSensorBase):
         self._attr_name = "Model ID"
         self._attr_unique_id = f"{device_id}_model_id"
         self._attr_icon = "mdi:information"
-        self._attr_entity_category = "diagnostic"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
     
     @property
     def native_value(self) -> Optional[int]:
@@ -382,7 +391,7 @@ class TRMNLPlaylistIdSensor(TRMNLSensorBase):
         self._attr_name = "Playlist ID"
         self._attr_unique_id = f"{device_id}_playlist_id"
         self._attr_icon = "mdi:playlist-play"
-        self._attr_entity_category = "diagnostic"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
     
     @property
     def native_value(self) -> Optional[int]:
