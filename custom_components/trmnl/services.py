@@ -229,6 +229,63 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         except Exception as e:
             _LOGGER.warning("Error refreshing playlist select entities: %s", e)
     
+    async def extract_playlist_id(playlist_input: str) -> str:
+        """Extract playlist ID from input string, handling multiple formats."""
+        import re
+        
+        playlist_input = str(playlist_input).strip()
+        
+        # Check if input is in "Name (ID: X)" format
+        id_match = re.search(r'\(ID:\s*(\d+)\)', playlist_input)
+        if id_match:
+            return id_match.group(1)
+        
+        # Check if input is a numeric ID
+        if playlist_input.isdigit():
+            return playlist_input
+        
+        # If input is a playlist name, try to find the ID by looking up playlists
+        try:
+            api = get_api_instance()
+            playlists = await api.get_playlists()
+            
+            for playlist in playlists:
+                playlist_name = playlist.get('name', f"Playlist {playlist.get('id', '')}")
+                if playlist_name.lower() == playlist_input.lower():
+                    return str(playlist.get('id', ''))
+            
+            # If we couldn't find a matching name, assume it's an ID
+            return playlist_input
+            
+        except Exception as e:
+            _LOGGER.warning("Could not lookup playlist by name: %s", e)
+            # Fallback: assume it's an ID
+            return playlist_input
+    
+    def build_dynamic_playlist_schemas(playlists: list) -> tuple:
+        """Build schemas with dynamic playlist options."""
+        # Create playlist options for validation
+        playlist_options = []
+        for playlist in playlists:
+            playlist_id = str(playlist.get('id', ''))
+            playlist_name = playlist.get('name', f'Playlist {playlist_id}')
+            playlist_options.append(f"{playlist_name} (ID: {playlist_id})")
+        
+        # Fallback options if no playlists available
+        if not playlist_options:
+            playlist_options = ["1", "2", "3", "4", "5"]
+        
+        UPDATE_PLAYLIST_NAME_SCHEMA = vol.Schema({
+            vol.Required("playlist_id"): cv.string,  # Keep as string to allow both formats
+            vol.Required("name"): cv.string,
+        })
+        
+        RESET_PLAYLIST_NAME_SCHEMA = vol.Schema({
+            vol.Required("playlist_id"): cv.string,  # Keep as string to allow both formats
+        })
+        
+        return UPDATE_PLAYLIST_NAME_SCHEMA, RESET_PLAYLIST_NAME_SCHEMA
+    
     # === DEVICE MANAGEMENT SERVICES ===
     
     async def handle_refresh_device(call: ServiceCall) -> None:
@@ -542,8 +599,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_update_playlist_name(call: ServiceCall) -> None:
         """Update a playlist name."""
         api = get_api_instance()
-        playlist_id = call.data["playlist_id"]
+        playlist_input = call.data["playlist_id"]
         new_name = call.data["name"]
+        
+        # Parse playlist ID from the input (handles multiple formats including playlist names)
+        playlist_id = await extract_playlist_id(playlist_input)
         
         success = await api.update_playlist(playlist_id, {"label": new_name})
         if not success:
@@ -557,7 +617,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_reset_playlist_name(call: ServiceCall) -> None:
         """Reset a playlist name to default format."""
         api = get_api_instance()
-        playlist_id = call.data["playlist_id"]
+        playlist_input = call.data["playlist_id"]
+        
+        # Parse playlist ID from the input (handles multiple formats including playlist names)
+        playlist_id = await extract_playlist_id(playlist_input)
         default_name = f"Playlist {playlist_id}"
         
         success = await api.update_playlist(playlist_id, {"label": default_name})
