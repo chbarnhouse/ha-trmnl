@@ -615,6 +615,52 @@ class TRMNLApi:
             _LOGGER.error("Error updating display for device %s: %s", device_id, e)
             return False
     
+    async def send_screen_to_device(self, device_id: str, screen_id: str) -> bool:
+        """Send an existing screen to a device by creating a temporary playlist."""
+        try:
+            _LOGGER.info("Sending screen %s to device %s", screen_id, device_id)
+            
+            # Find device to verify it exists
+            devices = await self.get_devices()
+            target_device = None
+            
+            for device in devices:
+                if device.get('friendly_id') == device_id or str(device.get('id')) == str(device_id):
+                    target_device = device
+                    break
+            
+            if not target_device:
+                _LOGGER.error("Could not find device %s", device_id)
+                return False
+            
+            # Create a temporary playlist with just this screen
+            playlist_data = {
+                "name": f"ha_screen_{device_id}_{int(datetime.now().timestamp())}",
+                "label": f"HA Screen {screen_id}",
+                "screen_ids": [str(screen_id)]
+            }
+            
+            playlist_result = await self.create_playlist(playlist_data)
+            if not playlist_result:
+                _LOGGER.error("Failed to create temporary playlist for screen %s", screen_id)
+                return False
+            
+            playlist_id = playlist_result.get('id')
+            _LOGGER.info("Created temporary playlist %s for screen %s", playlist_id, screen_id)
+            
+            # Assign the playlist to the device
+            success = await self.assign_device_to_playlist(device_id, str(playlist_id))
+            if success:
+                _LOGGER.info("Successfully sent screen %s to device %s", screen_id, device_id)
+                return True
+            else:
+                _LOGGER.error("Failed to assign screen playlist to device %s", device_id)
+                return False
+                
+        except Exception as e:
+            _LOGGER.error("Error sending screen %s to device %s: %s", screen_id, device_id, e)
+            return False
+    
     # Playlist Management Methods
     async def create_playlist(self, playlist_data: Dict) -> Optional[Dict]:
         """Create a new playlist in Terminus."""

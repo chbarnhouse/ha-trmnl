@@ -7,11 +7,218 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv, device_registry as dr, entity_registry as er
 from homeassistant.helpers.storage import Store
 from homeassistant.exceptions import ServiceValidationError
+import asyncio
+import base64
+import io
+import tempfile
+from pathlib import Path
+from datetime import datetime
+from playwright.async_api import async_playwright
+from PIL import Image, ImageOps
 
 from .api import TRMNLApi
 from .const import DOMAIN, STORAGE_KEY, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
+
+# === DASHBOARD CAPTURE CLASS ===
+
+class DashboardCapture:
+    """Captures Home Assistant dashboards for TRMNL display."""
+    
+    def __init__(self, hass: HomeAssistant):
+        self.hass = hass
+        self._playwright = None
+        self._browser = None
+        self._context = None
+    
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self._setup_browser()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self._cleanup_browser()
+    
+    async def _setup_browser(self):
+        """Setup Playwright browser for dashboard capture."""
+        try:
+            self._playwright = await async_playwright().start()
+            self._browser = await self._playwright.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-web-security',
+                    '--disable-features=VizDisplayCompositor'
+                ]
+            )
+            self._context = await self._browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                device_scale_factor=1
+            )
+            _LOGGER.info("Browser setup complete for dashboard capture")
+        except Exception as e:
+            _LOGGER.error("Failed to setup browser: %s", e)
+            raise
+    
+    async def _cleanup_browser(self):
+        """Cleanup browser resources."""
+        try:
+            if self._context:
+                await self._context.close()
+            if self._browser:
+                await self._browser.close()
+            if self._playwright:
+                await self._playwright.stop()
+            _LOGGER.info("Browser cleanup complete")
+        except Exception as e:
+            _LOGGER.error("Error during browser cleanup: %s", e)
+    
+    async def capture_dashboard(
+        self,
+        dashboard_path: str,
+        theme: str = None,
+        width: int = 800,
+        height: int = 480,
+        orientation: str = "landscape",
+        center_x_offset: int = 0,
+        center_y_offset: int = 0,
+        margin_top: int = 0,
+        margin_bottom: int = 0,
+        margin_left: int = 0,
+        margin_right: int = 0,
+        rotation_angle: float = 0.0
+    ) -> bytes:
+        """Capture a Home Assistant dashboard and return processed image data."""
+        
+        async with self:  # Use context manager for browser lifecycle
+            try:
+                # Get Home Assistant URL
+                base_url = str(self.hass.config.api.base_url)
+                if not base_url:
+                    base_url = "http://localhost:8123"
+                
+                # Build dashboard URL
+                dashboard_url = f"{base_url.rstrip('/')}{dashboard_path}"
+                
+                # Add theme parameter if specified
+                if theme:
+                    separator = "&" if "?" in dashboard_url else "?"
+                    dashboard_url += f"{separator}theme={theme}"
+                
+                _LOGGER.info("Capturing dashboard: %s", dashboard_url)
+                
+                # Create new page
+                page = await self._context.new_page()
+                
+                # Set viewport to desired size
+                await page.set_viewport_size({"width": width, "height": height})
+                
+                # Navigate to dashboard with authentication
+                # Note: In a real deployment, you'd need to handle HA authentication
+                # This assumes the dashboard is accessible (e.g., via long-lived access token)
+                await page.goto(dashboard_url, wait_until="networkidle")
+                
+                # Wait for dashboard to load
+                await page.wait_for_timeout(3000)  # Give dashboard time to render
+                
+                # Take screenshot
+                screenshot_bytes = await page.screenshot(
+                    type="png",
+                    full_page=False
+                )
+                
+                await page.close()
+                
+                # Process the image according to parameters
+                processed_image_bytes = await self._process_image(
+                    screenshot_bytes,
+                    orientation=orientation,
+                    center_x_offset=center_x_offset,
+                    center_y_offset=center_y_offset,
+                    margin_top=margin_top,
+                    margin_bottom=margin_bottom,
+                    margin_left=margin_left,
+                    margin_right=margin_right,
+                    rotation_angle=rotation_angle
+                )
+                
+                # Convert to base64 for TRMNL API
+                image_base64 = base64.b64encode(processed_image_bytes).decode('utf-8')
+                _LOGGER.info("Dashboard capture completed successfully")
+                
+                return image_base64
+                
+            except Exception as e:
+                _LOGGER.error("Error capturing dashboard: %s", e)
+                raise
+    
+    async def _process_image(
+        self,
+        image_data: bytes,
+        orientation: str = "landscape",
+        center_x_offset: int = 0,
+        center_y_offset: int = 0,
+        margin_top: int = 0,
+        margin_bottom: int = 0,
+        margin_left: int = 0,
+        margin_right: int = 0,
+        rotation_angle: float = 0.0
+    ) -> bytes:
+        """Process captured image with orientation, positioning, margins, and rotation."""
+        
+        # Load image
+        img = Image.open(io.BytesIO(image_data))
+        
+        # Apply orientation
+        if orientation == "portrait":
+            img = img.rotate(90, expand=True)
+        elif orientation == "portrait_inverted":
+            img = img.rotate(-90, expand=True)
+        elif orientation == "landscape_inverted":
+            img = img.rotate(180, expand=True)
+        # landscape is default (no rotation)
+        
+        # Apply fine rotation angle if specified
+        if rotation_angle != 0.0:
+            img = img.rotate(rotation_angle, expand=True, fillcolor='white')
+        
+        # Apply margins by creating a new image with padding
+        if any([margin_top, margin_bottom, margin_left, margin_right]):
+            old_width, old_height = img.size
+            new_width = old_width + margin_left + margin_right
+            new_height = old_height + margin_top + margin_bottom
+            
+            new_img = Image.new("RGB", (new_width, new_height), "white")
+            new_img.paste(img, (margin_left, margin_top))
+            img = new_img
+        
+        # Apply center offsets by cropping/repositioning
+        if center_x_offset != 0 or center_y_offset != 0:
+            width, height = img.size
+            
+            # Calculate crop box with offsets
+            left = max(0, center_x_offset)
+            top = max(0, center_y_offset)
+            right = min(width, width + center_x_offset)
+            bottom = min(height, height + center_y_offset)
+            
+            # If offset would crop the image, create a new canvas
+            if left > 0 or top > 0 or right < width or bottom < height:
+                new_img = Image.new("RGB", (width, height), "white")
+                paste_x = max(0, -center_x_offset)
+                paste_y = max(0, -center_y_offset)
+                new_img.paste(img, (paste_x, paste_y))
+                img = new_img
+        
+        # Convert back to bytes
+        output_buffer = io.BytesIO()
+        img.save(output_buffer, format="PNG", optimize=True)
+        
+        return output_buffer.getvalue()
 
 # === Core Device API Services ===
 DEVICE_REFRESH_SCHEMA = vol.Schema({
@@ -164,6 +371,27 @@ CONFIGURE_PLAYLISTS_SCHEMA = vol.Schema({
     vol.Required("action"): vol.In(["add", "remove", "set_label", "reset_label", "list"]),
     vol.Optional("playlist_id"): cv.string,
     vol.Optional("label"): cv.string,
+})
+
+# === Dashboard to TRMNL Service ===
+SEND_DASHBOARD_SCHEMA = vol.Schema({
+    vol.Required("device_id"): cv.string,
+    vol.Required("dashboard_path"): cv.string,
+    vol.Optional("theme"): cv.string,
+    vol.Optional("screen_name"): cv.string,
+    vol.Optional("action"): vol.In(["create_screen", "update_screen", "add_to_playlist"]),
+    vol.Optional("playlist_id"): cv.string,
+    vol.Optional("width", default=800): vol.Coerce(int),
+    vol.Optional("height", default=480): vol.Coerce(int),
+    vol.Optional("orientation", default="landscape"): vol.In(["landscape", "portrait", "landscape_inverted", "portrait_inverted"]),
+    vol.Optional("center_x_offset", default=0): vol.Coerce(int),
+    vol.Optional("center_y_offset", default=0): vol.Coerce(int),
+    vol.Optional("margin_top", default=0): vol.Coerce(int),
+    vol.Optional("margin_bottom", default=0): vol.Coerce(int),
+    vol.Optional("margin_left", default=0): vol.Coerce(int),
+    vol.Optional("margin_right", default=0): vol.Coerce(int),
+    vol.Optional("rotation_angle", default=0.0): vol.Coerce(float),
+    vol.Optional("update_frequency"): vol.In(["manual", "hourly", "daily", "every_30min", "every_15min"]),
 })
 
 # === Playlist Naming Services ===
@@ -342,6 +570,174 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         def get_all_playlists(self) -> Dict[str, str]:
             """Get all configured playlists (same as get_all_labels for now)."""
             return dict(self._labels)
+    
+    class DashboardCapture:
+        """Captures Home Assistant dashboards for TRMNL display."""
+        
+        def __init__(self, hass: HomeAssistant):
+            self.hass = hass
+            self._playwright = None
+            self._browser = None
+            
+        async def async_setup(self):
+            """Set up Playwright browser."""
+            try:
+                from playwright.async_api import async_playwright
+                self._playwright = await async_playwright().start()
+                self._browser = await self._playwright.chromium.launch(
+                    headless=True,
+                    args=['--no-sandbox', '--disable-setuid-sandbox']
+                )
+                _LOGGER.info("Dashboard capture browser initialized")
+                return True
+            except Exception as e:
+                _LOGGER.error("Failed to initialize dashboard capture: %s", e)
+                return False
+                
+        async def async_cleanup(self):
+            """Clean up browser resources."""
+            try:
+                if self._browser:
+                    await self._browser.close()
+                if self._playwright:
+                    await self._playwright.stop()
+            except Exception as e:
+                _LOGGER.error("Error cleaning up browser: %s", e)
+                
+        async def capture_dashboard(
+            self,
+            dashboard_path: str,
+            theme: str = None,
+            width: int = 800,
+            height: int = 480,
+            orientation: str = "landscape",
+            center_x_offset: int = 0,
+            center_y_offset: int = 0,
+            margin_top: int = 0,
+            margin_bottom: int = 0,
+            margin_left: int = 0,
+            margin_right: int = 0,
+            rotation_angle: float = 0.0
+        ) -> bytes:
+            """Capture a dashboard screenshot with specified parameters."""
+            
+            if not self._browser:
+                if not await self.async_setup():
+                    raise ServiceValidationError("Failed to initialize browser for dashboard capture")
+            
+            try:
+                # Create a new page
+                page = await self._browser.new_page()
+                
+                # Set viewport based on orientation and dimensions
+                if orientation in ["portrait", "portrait_inverted"]:
+                    viewport_width, viewport_height = height, width
+                else:
+                    viewport_width, viewport_height = width, height
+                    
+                await page.set_viewport_size(width=viewport_width, height=viewport_height)
+                
+                # Build the dashboard URL
+                base_url = f"http://localhost:8123{dashboard_path}"
+                if theme:
+                    base_url += f"?theme={theme}"
+                
+                _LOGGER.debug("Capturing dashboard: %s", base_url)
+                
+                # Navigate to dashboard
+                await page.goto(base_url, wait_until="networkidle")
+                
+                # Wait a bit more for any lazy-loaded content
+                await page.wait_for_timeout(2000)
+                
+                # Take screenshot
+                screenshot_bytes = await page.screenshot(
+                    full_page=False,
+                    type="png"
+                )
+                
+                await page.close()
+                
+                # Process the image for orientation, rotation, and positioning
+                processed_image = await self._process_image(
+                    screenshot_bytes,
+                    width, height,
+                    orientation,
+                    center_x_offset, center_y_offset,
+                    margin_top, margin_bottom, margin_left, margin_right,
+                    rotation_angle
+                )
+                
+                _LOGGER.info("Successfully captured dashboard: %s (%dx%d, %s)", 
+                           dashboard_path, width, height, orientation)
+                
+                return processed_image
+                
+            except Exception as e:
+                _LOGGER.error("Error capturing dashboard %s: %s", dashboard_path, e)
+                raise ServiceValidationError(f"Dashboard capture failed: {e}")
+                
+        async def _process_image(
+            self,
+            image_bytes: bytes,
+            target_width: int,
+            target_height: int, 
+            orientation: str,
+            center_x_offset: int,
+            center_y_offset: int,
+            margin_top: int,
+            margin_bottom: int,
+            margin_left: int,
+            margin_right: int,
+            rotation_angle: float
+        ) -> bytes:
+            """Process the captured image with positioning and orientation adjustments."""
+            
+            try:
+                from PIL import Image, ImageOps
+                
+                # Load the image
+                image = Image.open(io.BytesIO(image_bytes))
+                
+                # Apply orientation
+                if orientation == "portrait_inverted":
+                    image = image.rotate(180, expand=True)
+                elif orientation == "landscape_inverted": 
+                    image = image.rotate(180, expand=True)
+                elif orientation == "portrait":
+                    image = image.rotate(90, expand=True)
+                    
+                # Apply fine rotation if specified
+                if rotation_angle != 0.0:
+                    image = image.rotate(rotation_angle, expand=True, fillcolor='white')
+                    
+                # Calculate final dimensions with margins
+                final_width = target_width - margin_left - margin_right
+                final_height = target_height - margin_top - margin_bottom
+                
+                # Resize to target dimensions
+                image = image.resize((final_width, final_height), Image.Resampling.LANCZOS)
+                
+                # Create final canvas with margins
+                final_image = Image.new('RGB', (target_width, target_height), 'white')
+                
+                # Calculate position with center offsets
+                paste_x = margin_left + center_x_offset
+                paste_y = margin_top + center_y_offset
+                
+                # Paste the processed image onto the final canvas
+                final_image.paste(image, (paste_x, paste_y))
+                
+                # Convert back to bytes
+                output_buffer = io.BytesIO()
+                final_image.save(output_buffer, format='PNG', optimize=True)
+                
+                return output_buffer.getvalue()
+                
+            except Exception as e:
+                _LOGGER.error("Error processing image: %s", e)
+                # Return original image if processing fails
+                return image_bytes
             
         async def add_playlist(self, playlist_id: str, label: str = None):
             """Add a playlist to the configuration."""
@@ -796,6 +1192,77 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 # Fallback: just log the message
                 _LOGGER.info("Could not create notification (%s), logging instead: %s", notification_error, notification_message)
     
+    # === DASHBOARD CAPTURE SERVICE ===
+    
+    async def handle_send_dashboard_to_device(call: ServiceCall) -> None:
+        """Capture a Home Assistant dashboard and send it to a TRMNL device."""
+        try:
+            api = get_api_instance()
+            device_friendly_id = get_device_friendly_id(call.data["device_id"])
+            dashboard_path = call.data["dashboard_path"]
+            
+            # Get optional parameters with defaults
+            theme = call.data.get("theme")
+            width = call.data.get("width", 800)
+            height = call.data.get("height", 480)
+            orientation = call.data.get("orientation", "landscape")
+            center_x_offset = call.data.get("center_x_offset", 0)
+            center_y_offset = call.data.get("center_y_offset", 0)
+            margin_top = call.data.get("margin_top", 0)
+            margin_bottom = call.data.get("margin_bottom", 0)
+            margin_left = call.data.get("margin_left", 0)
+            margin_right = call.data.get("margin_right", 0)
+            rotation_angle = call.data.get("rotation_angle", 0.0)
+            
+            _LOGGER.info(
+                "Capturing dashboard %s for device %s with theme=%s, size=%dx%d, orientation=%s",
+                dashboard_path, device_friendly_id, theme, width, height, orientation
+            )
+            
+            # Initialize dashboard capture
+            dashboard_capture = DashboardCapture(hass)
+            
+            # Capture the dashboard
+            image_data = await dashboard_capture.capture_dashboard(
+                dashboard_path=dashboard_path,
+                theme=theme,
+                width=width,
+                height=height,
+                orientation=orientation,
+                center_x_offset=center_x_offset,
+                center_y_offset=center_y_offset,
+                margin_top=margin_top,
+                margin_bottom=margin_bottom,
+                margin_left=margin_left,
+                margin_right=margin_right,
+                rotation_angle=rotation_angle
+            )
+            
+            # Create a screen with the captured image
+            screen_data = {
+                "name": f"Dashboard - {dashboard_path}",
+                "content": image_data,
+                "duration": 30  # Default 30 second display duration
+            }
+            
+            screen_result = await api.create_screen(screen_data)
+            if not screen_result:
+                raise ServiceValidationError(f"Failed to create screen for dashboard {dashboard_path}")
+            
+            screen_id = screen_result.get('id')
+            _LOGGER.info("Successfully created screen %s with dashboard capture", screen_id)
+            
+            # Send the screen to the device
+            success = await api.send_screen_to_device(device_friendly_id, screen_id)
+            if not success:
+                raise ServiceValidationError(f"Failed to send dashboard screen to device {device_friendly_id}")
+            
+            _LOGGER.info("Successfully sent dashboard %s to device %s", dashboard_path, device_friendly_id)
+            
+        except Exception as e:
+            _LOGGER.error("Error in send_dashboard_to_device service: %s", e, exc_info=True)
+            raise ServiceValidationError(f"Failed to send dashboard to device: {e}")
+    
     # === REGISTER ALL SERVICES ===
     
     services = [
@@ -833,6 +1300,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         # Playlist Configuration
         ("configure_playlists", handle_configure_playlists, CONFIGURE_PLAYLISTS_SCHEMA),
+        
+        # Dashboard Capture
+        ("send_dashboard_to_device", handle_send_dashboard_to_device, SEND_DASHBOARD_SCHEMA),
         
         # Playlist Naming - TEMPORARILY DISABLED due to Terminus API limitations
         # The /api/playlists/{id} endpoints return HTTP 404, indicating these

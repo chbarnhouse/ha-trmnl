@@ -800,3 +800,138 @@ configure_playlists:
       selector:
         text:
       example: "Evening News"
+
+# === DASHBOARD CAPTURE SERVICE ===
+
+send_dashboard_to_device:
+  name: Send Dashboard to TRMNL
+  description: Capture a Home Assistant dashboard and display it on your TRMNL device
+  fields:
+    device_id:
+      name: TRMNL Device
+      description: Select the TRMNL device to display the dashboard on
+      required: true
+      selector:
+        device:
+          integration: trmnl
+    dashboard_path:
+      name: Dashboard Path
+      description: Path to the Lovelace dashboard (e.g., /lovelace/dashboard-name or /lovelace)
+      required: true
+      selector:
+        text:
+      example: "/lovelace/main"
+    theme:
+      name: Theme
+      description: Home Assistant theme to apply to the dashboard (optional)
+      required: false
+      selector:
+        text:
+      example: "dark"
+    width:
+      name: Width
+      description: Dashboard capture width in pixels
+      required: false
+      default: 800
+      selector:
+        number:
+          min: 400
+          max: 1920
+          mode: box
+    height:
+      name: Height
+      description: Dashboard capture height in pixels
+      required: false
+      default: 480
+      selector:
+        number:
+          min: 300
+          max: 1080
+          mode: box
+    orientation:
+      name: Orientation
+      description: Display orientation for the TRMNL device
+      required: false
+      default: "landscape"
+      selector:
+        select:
+          options:
+            - value: "landscape"
+              label: "Landscape"
+            - value: "portrait"
+              label: "Portrait"
+            - value: "landscape_inverted"
+              label: "Landscape Inverted"
+            - value: "portrait_inverted"
+              label: "Portrait Inverted"
+    center_x_offset:
+      name: Center X Offset
+      description: Horizontal offset from center in pixels (+ moves right, - moves left)
+      required: false
+      default: 0
+      selector:
+        number:
+          min: -200
+          max: 200
+          mode: box
+    center_y_offset:
+      name: Center Y Offset
+      description: Vertical offset from center in pixels (+ moves down, - moves up)
+      required: false
+      default: 0
+      selector:
+        number:
+          min: -200
+          max: 200
+          mode: box
+    margin_top:
+      name: Top Margin
+      description: Top margin in pixels
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: box
+    margin_bottom:
+      name: Bottom Margin
+      description: Bottom margin in pixels
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: box
+    margin_left:
+      name: Left Margin
+      description: Left margin in pixels
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: box
+    margin_right:
+      name: Right Margin
+      description: Right margin in pixels
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: box
+    rotation_angle:
+      name: Rotation Angle
+      description: Fine angle adjustment in degrees to account for unlevel TRMNL mounting
+      required: false
+      default: 0.0
+      selector:
+        number:
+          min: -15.0
+          max: 15.0
+          step: 0.1
+          mode: box
