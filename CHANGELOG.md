@@ -2,6 +2,64 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.6.0] - 2025-01-07
+
+### 🎉 Major New Feature: Dashboard Capture Service
+
+Transform your Home Assistant dashboards into beautiful TRMNL displays with comprehensive automation support.
+
+#### ✨ New Features
+
+- **Dashboard Capture Service** (`trmnl.send_dashboard_to_device`)
+  - Full Playwright browser automation for dashboard screenshots
+  - Support for all Home Assistant themes
+  - Configurable capture dimensions (optimized for 7.5" TRMNL default 800x480)
+  - Advanced image processing with PIL/Pillow
+
+#### 🔧 Customization Options
+
+- **Orientation Support**: landscape, portrait, landscape_inverted, portrait_inverted
+- **Positioning Controls**: center X/Y offsets for precise positioning
+- **Margin Controls**: individual margin settings for all sides
+- **Fine Rotation**: ±15° adjustment for unlevel TRMNL mounting
+- **Theme Integration**: Apply any Home Assistant theme to dashboard capture
+
+#### 🤖 Automation Support
+
+- **2 Automation Blueprints**:
+  - Scheduled dashboard capture with weekday filtering
+  - Weather-based dashboard switching with time triggers
+- **8 Example Automations** covering common use cases:
+  - Daily morning/evening updates
+  - Hourly work updates
+  - Weather alert dashboards
+  - Motion-triggered updates
+  - Multi-device parallel updates
+  - Dashboard rotation throughout the day
+- **Comprehensive Documentation**: troubleshooting, performance tips, design recommendations
+
+#### 🛠 Technical Implementation
+
+- Browser automation using Playwright with Chromium
+- Image processing pipeline with PIL/Pillow
+- Automatic screen creation and device assignment via Terminus API
+- Resource cleanup and error handling
+- Debug logging support
+
+#### 📦 Dependencies Added
+
+- `playwright` - Browser automation for dashboard capture
+- `pillow` - Image processing for orientation and positioning
+
+#### 🎯 Use Cases
+
+- **Morning Dashboard**: Weather, calendar, and daily briefing
+- **Work Dashboard**: Productivity metrics and status indicators  
+- **Evening Dashboard**: Relaxation themes and evening routines
+- **Weather Alerts**: Severe weather information and warnings
+- **Motion Activation**: Update display when someone enters the room
+- **Multi-Device Orchestration**: Different dashboards for different rooms
+
 ## [2.0.0] - 2024-08-27
 
 ### Major Features Added
