@@ -1,0 +1,99 @@
+blueprint:
+  name: TRMNL Weather-Based Dashboard Update
+  description: Update TRMNL dashboard based on weather conditions or time of day
+  domain: automation
+  input:
+    trmnl_device:
+      name: TRMNL Device
+      description: The TRMNL device to update
+      selector:
+        device:
+          integration: trmnl
+    morning_dashboard:
+      name: Morning Dashboard
+      description: Dashboard to show in the morning
+      default: "/lovelace/morning"
+      selector:
+        text:
+    evening_dashboard:
+      name: Evening Dashboard
+      description: Dashboard to show in the evening
+      default: "/lovelace/evening"
+      selector:
+        text:
+    weather_dashboard:
+      name: Weather Alert Dashboard
+      description: Dashboard to show during severe weather
+      default: "/lovelace/weather"
+      selector:
+        text:
+    morning_time:
+      name: Morning Switch Time
+      description: Time to switch to morning dashboard
+      default: "07:00:00"
+      selector:
+        time:
+    evening_time:
+      name: Evening Switch Time
+      description: Time to switch to evening dashboard
+      default: "18:00:00"
+      selector:
+        time:
+    weather_entity:
+      name: Weather Entity (Optional)
+      description: Weather entity to monitor for severe conditions
+      default: ""
+      selector:
+        entity:
+          domain: weather
+    theme:
+      name: Theme
+      description: Theme to use for all dashboards
+      default: ""
+      selector:
+        text:
+
+trigger:
+  - platform: time
+    at: !input morning_time
+    id: "morning"
+  - platform: time
+    at: !input evening_time
+    id: "evening"
+  - platform: state
+    entity_id: !input weather_entity
+    to: 
+      - "stormy"
+      - "snowy"
+      - "rainy"
+    id: "weather"
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: "morning"
+        sequence:
+          - service: trmnl.send_dashboard_to_device
+            data:
+              device_id: !input trmnl_device
+              dashboard_path: !input morning_dashboard
+              theme: !input theme
+      - conditions:
+          - condition: trigger
+            id: "evening"
+        sequence:
+          - service: trmnl.send_dashboard_to_device
+            data:
+              device_id: !input trmnl_device
+              dashboard_path: !input evening_dashboard
+              theme: !input theme
+      - conditions:
+          - condition: trigger
+            id: "weather"
+        sequence:
+          - service: trmnl.send_dashboard_to_device
+            data:
+              device_id: !input trmnl_device
+              dashboard_path: !input weather_dashboard
+              theme: !input theme

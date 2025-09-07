@@ -1,0 +1,86 @@
+blueprint:
+  name: TRMNL Scheduled Dashboard Capture
+  description: Automatically capture and send Home Assistant dashboards to your TRMNL device on a schedule
+  domain: automation
+  input:
+    trmnl_device:
+      name: TRMNL Device
+      description: The TRMNL device to send the dashboard to
+      selector:
+        device:
+          integration: trmnl
+    dashboard_path:
+      name: Dashboard Path
+      description: Path to the Lovelace dashboard (e.g., /lovelace/main)
+      default: "/lovelace"
+      selector:
+        text:
+    schedule_time:
+      name: Schedule Time
+      description: Time to capture and send the dashboard
+      selector:
+        time:
+    theme:
+      name: Theme (Optional)
+      description: Home Assistant theme to apply
+      default: ""
+      selector:
+        text:
+    width:
+      name: Width
+      description: Capture width in pixels
+      default: 800
+      selector:
+        number:
+          min: 400
+          max: 1920
+          mode: box
+    height:
+      name: Height
+      description: Capture height in pixels
+      default: 480
+      selector:
+        number:
+          min: 300
+          max: 1080
+          mode: box
+    orientation:
+      name: Orientation
+      description: Display orientation
+      default: "landscape"
+      selector:
+        select:
+          options:
+            - "landscape"
+            - "portrait"
+            - "landscape_inverted" 
+            - "portrait_inverted"
+    weekdays_only:
+      name: Weekdays Only
+      description: Only run on weekdays (Monday-Friday)
+      default: false
+      selector:
+        boolean:
+
+trigger:
+  - platform: time
+    at: !input schedule_time
+
+condition:
+  - condition: template
+    value_template: >
+      {% if weekdays_only %}
+        {{ now().weekday() < 5 }}
+      {% else %}
+        true
+      {% endif %}
+
+action:
+  - service: trmnl.send_dashboard_to_device
+    data:
+      device_id: !input trmnl_device
+      dashboard_path: !input dashboard_path
+      theme: !input theme
+      width: !input width
+      height: !input height
+      orientation: !input orientation

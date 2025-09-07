@@ -1,0 +1,176 @@
+# TRMNL Dashboard Automation Examples
+# Copy these automations to your Home Assistant configuration
+
+# Example 1: Daily morning dashboard update
+- alias: "TRMNL Morning Dashboard"
+  description: "Send morning dashboard to TRMNL at 7:00 AM on weekdays"
+  trigger:
+    - platform: time
+      at: "07:00:00"
+  condition:
+    - condition: time
+      weekday:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+  action:
+    - service: trmnl.send_dashboard_to_device
+      data:
+        device_id: "your_trmnl_device_id"
+        dashboard_path: "/lovelace/morning"
+        theme: "sunrise"
+        orientation: "landscape"
+
+# Example 2: Evening dashboard with different theme
+- alias: "TRMNL Evening Dashboard"
+  description: "Send evening dashboard with dark theme"
+  trigger:
+    - platform: sun
+      event: sunset
+      offset: "+00:30:00"
+  action:
+    - service: trmnl.send_dashboard_to_device
+      data:
+        device_id: "your_trmnl_device_id"
+        dashboard_path: "/lovelace/evening"
+        theme: "dark"
+        orientation: "landscape"
+
+# Example 3: Hourly dashboard update during work hours
+- alias: "TRMNL Hourly Work Updates"
+  description: "Update TRMNL every hour during work hours"
+  trigger:
+    - platform: time_pattern
+      minutes: 0
+  condition:
+    - condition: time
+      after: "09:00:00"
+      before: "17:00:00"
+    - condition: time
+      weekday:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+  action:
+    - service: trmnl.send_dashboard_to_device
+      data:
+        device_id: "your_trmnl_device_id"
+        dashboard_path: "/lovelace/work"
+        theme: "minimal"
+
+# Example 4: Weather alert dashboard
+- alias: "TRMNL Weather Alert Dashboard"
+  description: "Show weather dashboard when severe weather is detected"
+  trigger:
+    - platform: state
+      entity_id: weather.home
+      attribute: condition
+      to:
+        - "stormy"
+        - "snowy"
+        - "rainy"
+  action:
+    - service: trmnl.send_dashboard_to_device
+      data:
+        device_id: "your_trmnl_device_id"
+        dashboard_path: "/lovelace/weather"
+        theme: "weather"
+        margin_top: 10
+        margin_bottom: 10
+
+# Example 5: Motion-triggered dashboard update
+- alias: "TRMNL Motion Dashboard Update"
+  description: "Update dashboard when motion is detected in living room"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.living_room_motion
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: binary_sensor.living_room_motion
+      state: "off"
+      for:
+        minutes: 5
+  action:
+    - service: trmnl.send_dashboard_to_device
+      data:
+        device_id: "your_trmnl_device_id"
+        dashboard_path: "/lovelace/main"
+        theme: "auto"
+
+# Example 6: Custom orientation for portrait TRMNL mounting
+- alias: "TRMNL Portrait Dashboard"
+  description: "Send dashboard optimized for portrait orientation"
+  trigger:
+    - platform: time
+      at: "08:00:00"
+  action:
+    - service: trmnl.send_dashboard_to_device
+      data:
+        device_id: "your_trmnl_device_id"
+        dashboard_path: "/lovelace/portrait"
+        orientation: "portrait"
+        width: 480
+        height: 800
+        center_y_offset: 20
+
+# Example 7: Multiple device update
+- alias: "TRMNL All Devices Morning Update"
+  description: "Update all TRMNL devices with different dashboards"
+  trigger:
+    - platform: time
+      at: "08:00:00"
+  action:
+    - parallel:
+        - service: trmnl.send_dashboard_to_device
+          data:
+            device_id: "trmnl_kitchen"
+            dashboard_path: "/lovelace/kitchen"
+            theme: "breakfast"
+        - service: trmnl.send_dashboard_to_device
+          data:
+            device_id: "trmnl_office"
+            dashboard_path: "/lovelace/work"
+            theme: "minimal"
+        - service: trmnl.send_dashboard_to_device
+          data:
+            device_id: "trmnl_bedroom"
+            dashboard_path: "/lovelace/morning"
+            theme: "sunrise"
+
+# Example 8: Dashboard rotation throughout the day
+- alias: "TRMNL Dashboard Rotation"
+  description: "Rotate through different dashboards every 4 hours"
+  trigger:
+    - platform: time_pattern
+      hours: "/4"
+  action:
+    - service: trmnl.send_dashboard_to_device
+      data:
+        device_id: "your_trmnl_device_id"
+        dashboard_path: >
+          {% set hour = now().hour %}
+          {% if hour < 6 %}
+            /lovelace/night
+          {% elif hour < 12 %}
+            /lovelace/morning
+          {% elif hour < 18 %}
+            /lovelace/day
+          {% else %}
+            /lovelace/evening
+          {% endif %}
+        theme: >
+          {% set hour = now().hour %}
+          {% if hour < 6 %}
+            dark
+          {% elif hour < 12 %}
+            sunrise
+          {% elif hour < 18 %}
+            light
+          {% else %}
+            sunset
+          {% endif %}
