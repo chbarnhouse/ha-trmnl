@@ -122,34 +122,47 @@ class TRMNLApi:
             playlist_id = device.get('playlist_id')
             if playlist_id:
                 playlist_ids.add(playlist_id)
-        
-        # If no playlists found in devices, create some default ones
-        if not playlist_ids:
-            playlist_ids = set(range(1, 6))  # Default to 1-5
+                _LOGGER.debug("Found playlist ID %s from device %s", playlist_id, device.get('friendly_id', device.get('id')))
         
         # Get the label manager if available
         label_manager = None
+        configured_playlists = set()
         if hass:
             from .const import DOMAIN
             label_manager = hass.data.get(f"{DOMAIN}_label_manager")
+            if label_manager:
+                # Include all playlists that have been configured (even if not currently used by devices)
+                configured_playlists = set(int(pid) for pid in label_manager.get_all_playlists().keys() if pid.isdigit())
+        
+        # Combine discovered and configured playlists
+        all_playlist_ids = playlist_ids.union(configured_playlists)
+        
+        # If no playlists found at all, create some default ones
+        if not all_playlist_ids:
+            all_playlist_ids = set(range(1, 6))  # Default to 1-5
         
         # Create playlist list with custom labels
         playlists = []
-        for playlist_id in playlist_ids:
+        for playlist_id in all_playlist_ids:
             if label_manager:
                 name = label_manager.get_label(str(playlist_id))
+                # Only include if it's been explicitly configured OR discovered from devices
+                if str(playlist_id) in label_manager.get_all_playlists() or playlist_id in playlist_ids:
+                    playlists.append({
+                        'id': playlist_id,
+                        'name': name
+                    })
             else:
-                name = f"Playlist {playlist_id}"
-                
-            playlists.append({
-                'id': playlist_id,
-                'name': name
-            })
+                # No label manager, show all discovered playlists with default names
+                playlists.append({
+                    'id': playlist_id,
+                    'name': f"Playlist {playlist_id}"
+                })
         
         # Sort by ID
         playlists.sort(key=lambda x: x['id'])
         
-        _LOGGER.debug("Found %d playlists: %s", len(playlists), [p['name'] for p in playlists])
+        _LOGGER.debug("Found %d playlists: %s", len(playlists), [f"{p['id']}: {p['name']}" for p in playlists])
         return playlists
 
     async def assign_device_to_playlist(self, device_id: str, playlist_id: str) -> bool:

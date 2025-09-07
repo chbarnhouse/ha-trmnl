@@ -159,17 +159,12 @@ DEVICE_SETUP_SCHEMA = vol.Schema({
     vol.Optional("force_setup"): cv.boolean,
 })
 
-# === Playlist Label Management Services ===
-SET_PLAYLIST_LABEL_SCHEMA = vol.Schema({
-    vol.Required("playlist_id"): cv.string,
-    vol.Required("label"): cv.string,
+# === Playlist Configuration Service ===
+CONFIGURE_PLAYLISTS_SCHEMA = vol.Schema({
+    vol.Required("action"): vol.In(["add", "remove", "set_label", "reset_label", "list"]),
+    vol.Optional("playlist_id"): cv.string,
+    vol.Optional("label"): cv.string,
 })
-
-REMOVE_PLAYLIST_LABEL_SCHEMA = vol.Schema({
-    vol.Required("playlist_id"): cv.string,
-})
-
-LIST_PLAYLIST_LABELS_SCHEMA = vol.Schema({})
 
 # === Playlist Naming Services ===
 UPDATE_PLAYLIST_NAME_SCHEMA = vol.Schema({
@@ -343,6 +338,27 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         def get_all_labels(self) -> Dict[str, str]:
             """Get all custom labels."""
             return dict(self._labels)
+            
+        def get_all_playlists(self) -> Dict[str, str]:
+            """Get all configured playlists (same as get_all_labels for now)."""
+            return dict(self._labels)
+            
+        async def add_playlist(self, playlist_id: str, label: str = None):
+            """Add a playlist to the configuration."""
+            playlist_id = str(playlist_id)
+            if label is None:
+                label = f"Playlist {playlist_id}"
+            self._labels[playlist_id] = label
+            await self.async_save()
+            _LOGGER.info("Added playlist %s with label '%s'", playlist_id, label)
+            
+        async def remove_playlist(self, playlist_id: str):
+            """Remove a playlist from the configuration."""
+            playlist_id = str(playlist_id)
+            if playlist_id in self._labels:
+                del self._labels[playlist_id]
+                await self.async_save()
+                _LOGGER.info("Removed playlist %s from configuration", playlist_id)
     
     # === DEVICE MANAGEMENT SERVICES ===
     
@@ -699,48 +715,57 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     # Store label manager globally for API access
     hass.data.setdefault(f"{DOMAIN}_label_manager", label_manager)
     
-    async def handle_set_playlist_label(call: ServiceCall) -> None:
-        """Set a custom label for a playlist."""
-        playlist_id = call.data["playlist_id"]
-        label = call.data["label"]
+    async def handle_configure_playlists(call: ServiceCall) -> None:
+        """Configure Home Assistant playlists - comprehensive playlist management."""
+        action = call.data["action"]
+        playlist_id = call.data.get("playlist_id")
+        label = call.data.get("label")
         
-        await label_manager.set_label(playlist_id, label)
-        
-        # Refresh playlist select entities to show updated labels
-        await refresh_playlist_selects()
-        
-        _LOGGER.info("Set playlist %s label to '%s'", playlist_id, label)
-    
-    async def handle_remove_playlist_label(call: ServiceCall) -> None:
-        """Remove a custom label for a playlist."""
-        playlist_id = call.data["playlist_id"]
-        
-        await label_manager.remove_label(playlist_id)
-        
-        # Refresh playlist select entities to show updated labels  
-        await refresh_playlist_selects()
-        
-        _LOGGER.info("Removed custom label for playlist %s", playlist_id)
-    
-    async def handle_list_playlist_labels(call: ServiceCall) -> None:
-        """List all custom playlist labels."""
-        labels = label_manager.get_all_labels()
-        
-        _LOGGER.info("Current playlist labels: %s", labels)
-        
-        # Create a persistent notification with the labels
-        notification_message = "**Current Playlist Labels:**\n"
-        if labels:
-            for playlist_id, label in labels.items():
-                notification_message += f"- Playlist {playlist_id}: {label}\n"
-        else:
-            notification_message += "No custom labels set."
+        if action == "add":
+            if not playlist_id:
+                raise ServiceValidationError("playlist_id is required for add action")
+            await label_manager.add_playlist(playlist_id, label)
+            await refresh_playlist_selects()
+            _LOGGER.info("Added playlist %s%s to Home Assistant", playlist_id, f" with label '{label}'" if label else "")
             
-        hass.components.persistent_notification.create(
-            notification_message,
-            title="TRMNL Playlist Labels",
-            notification_id="trmnl_playlist_labels"
-        )
+        elif action == "remove":
+            if not playlist_id:
+                raise ServiceValidationError("playlist_id is required for remove action")
+            await label_manager.remove_playlist(playlist_id)
+            await refresh_playlist_selects()
+            _LOGGER.info("Removed playlist %s from Home Assistant", playlist_id)
+            
+        elif action == "set_label":
+            if not playlist_id or not label:
+                raise ServiceValidationError("Both playlist_id and label are required for set_label action")
+            await label_manager.set_label(playlist_id, label)
+            await refresh_playlist_selects()
+            _LOGGER.info("Set playlist %s label to '%s'", playlist_id, label)
+            
+        elif action == "reset_label":
+            if not playlist_id:
+                raise ServiceValidationError("playlist_id is required for reset_label action")
+            await label_manager.remove_label(playlist_id)
+            await refresh_playlist_selects()
+            _LOGGER.info("Reset playlist %s label to default", playlist_id)
+            
+        elif action == "list":
+            playlists = label_manager.get_all_playlists()
+            _LOGGER.info("Current configured playlists: %s", playlists)
+            
+            # Create a persistent notification with the playlist configuration
+            notification_message = "**Home Assistant Playlist Configuration:**\n"
+            if playlists:
+                for playlist_id, playlist_label in playlists.items():
+                    notification_message += f"- Playlist {playlist_id}: {playlist_label}\n"
+            else:
+                notification_message += "No playlists configured in Home Assistant.\nOnly playlists detected from your TRMNL devices will be shown."
+                
+            hass.components.persistent_notification.create(
+                notification_message,
+                title="TRMNL Playlist Configuration",
+                notification_id="trmnl_playlist_configuration"
+            )
     
     # === REGISTER ALL SERVICES ===
     
@@ -777,10 +802,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         # Setup
         ("device_setup", handle_device_setup, DEVICE_SETUP_SCHEMA),
         
-        # Playlist Label Management
-        ("set_playlist_label", handle_set_playlist_label, SET_PLAYLIST_LABEL_SCHEMA),
-        ("remove_playlist_label", handle_remove_playlist_label, REMOVE_PLAYLIST_LABEL_SCHEMA),
-        ("list_playlist_labels", handle_list_playlist_labels, LIST_PLAYLIST_LABELS_SCHEMA),
+        # Playlist Configuration
+        ("configure_playlists", handle_configure_playlists, CONFIGURE_PLAYLISTS_SCHEMA),
         
         # Playlist Naming - TEMPORARILY DISABLED due to Terminus API limitations
         # The /api/playlists/{id} endpoints return HTTP 404, indicating these

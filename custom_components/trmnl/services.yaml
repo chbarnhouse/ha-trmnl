@@ -763,39 +763,40 @@ reset_playlist_name:
             - "Playlist 5 (ID: 5)"
           custom_value: true
 
-# === PLAYLIST LABEL MANAGEMENT SERVICES ===
+# === PLAYLIST CONFIGURATION SERVICE ===
 
-set_playlist_label:
-  name: Set Playlist Label
-  description: Set a custom label for a playlist (Home Assistant only)
+configure_playlists:
+  name: Configure Home Assistant Playlists
+  description: Comprehensive playlist management for Home Assistant display
   fields:
-    playlist_id:
-      name: Playlist ID
-      description: The playlist ID to label (1, 2, 3, etc.)
+    action:
+      name: Action
+      description: What to do with the playlist configuration
       required: true
       selector:
+        select:
+          options:
+            - value: "add"
+              label: "Add Playlist"
+            - value: "remove"
+              label: "Remove Playlist"
+            - value: "set_label"
+              label: "Set Custom Label"
+            - value: "reset_label"  
+              label: "Reset to Default Label"
+            - value: "list"
+              label: "List All Configured Playlists"
+    playlist_id:
+      name: Playlist ID
+      description: The playlist ID (required for add/remove/set_label/reset_label actions)
+      required: false
+      selector:
         text:
-      example: "1"
+      example: "3"
     label:
       name: Custom Label
-      description: The friendly name to display for this playlist
-      required: true
+      description: Friendly name to display (required for set_label, optional for add)
+      required: false
       selector:
         text:
-      example: "Morning Dashboard"
-
-remove_playlist_label:
-  name: Remove Playlist Label
-  description: Remove a custom label and return to default "Playlist X"
-  fields:
-    playlist_id:
-      name: Playlist ID
-      description: The playlist ID to remove label from
-      required: true
-      selector:
-        text:
-      example: "1"
-
-list_playlist_labels:
-  name: List Playlist Labels
-  description: Show all current custom playlist labels in a notification
+      example: "Evening News"
