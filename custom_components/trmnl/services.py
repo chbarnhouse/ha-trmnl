@@ -780,16 +780,21 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             else:
                 notification_message += "No playlists configured in Home Assistant.\nOnly playlists detected from your TRMNL devices will be shown."
             
-            # Check if persistent_notification component is available
-            if hasattr(service_hass.components, 'persistent_notification') and service_hass.components.persistent_notification:
-                service_hass.components.persistent_notification.create(
-                    notification_message,
-                    title="TRMNL Playlist Configuration", 
-                    notification_id="trmnl_playlist_configuration"
+            # Try to create a persistent notification, with fallback to logging
+            try:
+                await service_hass.services.async_call(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "message": notification_message,
+                        "title": "TRMNL Playlist Configuration",
+                        "notification_id": "trmnl_playlist_configuration"
+                    }
                 )
-            else:
+                _LOGGER.info("Created notification with playlist configuration")
+            except Exception as notification_error:
                 # Fallback: just log the message
-                _LOGGER.info("Playlist Configuration: %s", notification_message)
+                _LOGGER.info("Could not create notification (%s), logging instead: %s", notification_error, notification_message)
     
     # === REGISTER ALL SERVICES ===
     
