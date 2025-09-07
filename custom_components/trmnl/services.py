@@ -717,42 +717,52 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     async def handle_configure_playlists(call: ServiceCall) -> None:
         """Configure Home Assistant playlists - comprehensive playlist management."""
-        action = call.data["action"]
-        playlist_id = call.data.get("playlist_id")
-        label = call.data.get("label")
-        
-        _LOGGER.debug("Configure playlists called with action=%s, playlist_id=%s, label=%s", action, playlist_id, label)
+        try:
+            action = call.data["action"]
+            playlist_id = call.data.get("playlist_id")
+            label = call.data.get("label")
+            
+            _LOGGER.debug("Configure playlists called with action=%s, playlist_id=%s, label=%s", action, playlist_id, label)
+            
+            # Get the label manager from hass.data
+            current_label_manager = hass.data.get(f"{DOMAIN}_label_manager")
+            if not current_label_manager:
+                raise ServiceValidationError("Playlist label manager not initialized")
+                
+        except Exception as e:
+            _LOGGER.error("Error in configure_playlists service: %s", e, exc_info=True)
+            raise
         
         if action == "add":
             if not playlist_id:
                 raise ServiceValidationError("playlist_id is required for add action")
-            await label_manager.add_playlist(playlist_id, label)
+            await current_label_manager.add_playlist(playlist_id, label)
             await refresh_playlist_selects()
             _LOGGER.info("Added playlist %s%s to Home Assistant", playlist_id, f" with label '{label}'" if label else "")
             
         elif action == "remove":
             if not playlist_id:
                 raise ServiceValidationError("playlist_id is required for remove action")
-            await label_manager.remove_playlist(playlist_id)
+            await current_label_manager.remove_playlist(playlist_id)
             await refresh_playlist_selects()
             _LOGGER.info("Removed playlist %s from Home Assistant", playlist_id)
             
         elif action == "set_label":
             if not playlist_id or not label:
                 raise ServiceValidationError("Both playlist_id and label are required for set_label action")
-            await label_manager.set_label(playlist_id, label)
+            await current_label_manager.set_label(playlist_id, label)
             await refresh_playlist_selects()
             _LOGGER.info("Set playlist %s label to '%s'", playlist_id, label)
             
         elif action == "reset_label":
             if not playlist_id:
                 raise ServiceValidationError("playlist_id is required for reset_label action")
-            await label_manager.remove_label(playlist_id)
+            await current_label_manager.remove_label(playlist_id)
             await refresh_playlist_selects()
             _LOGGER.info("Reset playlist %s label to default", playlist_id)
             
         elif action == "list":
-            playlists = label_manager.get_all_playlists()
+            playlists = current_label_manager.get_all_playlists()
             _LOGGER.info("Current configured playlists: %s", playlists)
             
             # Create a persistent notification with the playlist configuration
