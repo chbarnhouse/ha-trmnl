@@ -721,6 +721,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         playlist_id = call.data.get("playlist_id")
         label = call.data.get("label")
         
+        _LOGGER.debug("Configure playlists called with action=%s, playlist_id=%s, label=%s", action, playlist_id, label)
+        
         if action == "add":
             if not playlist_id:
                 raise ServiceValidationError("playlist_id is required for add action")
@@ -760,12 +762,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     notification_message += f"- Playlist {playlist_id}: {playlist_label}\n"
             else:
                 notification_message += "No playlists configured in Home Assistant.\nOnly playlists detected from your TRMNL devices will be shown."
-                
-            hass.components.persistent_notification.create(
-                notification_message,
-                title="TRMNL Playlist Configuration",
-                notification_id="trmnl_playlist_configuration"
-            )
+            
+            # Check if persistent_notification component is available
+            if hasattr(hass.components, 'persistent_notification') and hass.components.persistent_notification:
+                hass.components.persistent_notification.create(
+                    notification_message,
+                    title="TRMNL Playlist Configuration",
+                    notification_id="trmnl_playlist_configuration"
+                )
+            else:
+                # Fallback: just log the message
+                _LOGGER.info("Playlist Configuration: %s", notification_message)
     
     # === REGISTER ALL SERVICES ===
     
