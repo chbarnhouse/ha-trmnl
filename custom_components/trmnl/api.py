@@ -109,56 +109,44 @@ class TRMNLApi:
             _LOGGER.error("No screens found or API error")
             return []
 
-    async def get_playlists(self) -> List[Dict]:
-        """Get all playlists from Terminus."""
+    async def get_playlists(self, hass=None) -> List[Dict]:
+        """Get all playlists from Terminus with custom labels."""
         _LOGGER.debug("Fetching playlists from Terminus")
         
-        # Since there's no JSON API for playlists, we'll get them via individual API calls
-        # First, collect all playlist IDs that are in use by devices
+        # Get device data which may contain playlist information
         devices = await self.get_devices()
         playlist_ids = set()
         
+        # Extract playlist IDs from device data
         for device in devices:
             playlist_id = device.get('playlist_id')
             if playlist_id:
                 playlist_ids.add(playlist_id)
         
-        # If no playlists found in devices, try a range of common playlist IDs
+        # If no playlists found in devices, create some default ones
         if not playlist_ids:
-            playlist_ids = set(range(1, 11))  # Try 1-10
+            playlist_ids = set(range(1, 6))  # Default to 1-5
         
+        # Get the label manager if available
+        label_manager = None
+        if hass:
+            from .const import DOMAIN
+            label_manager = hass.data.get(f"{DOMAIN}_label_manager")
+        
+        # Create playlist list with custom labels
         playlists = []
-        
-        # For each playlist ID, try to get its actual name by attempting to update it with the same data
-        # This will tell us if the playlist exists and what its current name is
         for playlist_id in playlist_ids:
-            try:
-                # Try to get playlist info by making a "no-op" update request
-                # This endpoint should return the current playlist data
-                result = await self._make_request(f"/api/playlists/{playlist_id}")
+            if label_manager:
+                name = label_manager.get_label(str(playlist_id))
+            else:
+                name = f"Playlist {playlist_id}"
                 
-                if result and isinstance(result, dict):
-                    # We got playlist data back
-                    playlist_data = result.get("data", result)
-                    playlists.append({
-                        'id': playlist_id,
-                        'name': playlist_data.get('label', playlist_data.get('name', f"Playlist {playlist_id}"))
-                    })
-                else:
-                    # Playlist exists but no detailed data, use default name
-                    playlists.append({
-                        'id': playlist_id,
-                        'name': f"Playlist {playlist_id}"
-                    })
-                    
-            except Exception:
-                # If we can't get the playlist, assume it exists with default name
-                playlists.append({
-                    'id': playlist_id,
-                    'name': f"Playlist {playlist_id}"
-                })
+            playlists.append({
+                'id': playlist_id,
+                'name': name
+            })
         
-        # Sort playlists by ID
+        # Sort by ID
         playlists.sort(key=lambda x: x['id'])
         
         _LOGGER.debug("Found %d playlists: %s", len(playlists), [p['name'] for p in playlists])

@@ -25,8 +25,8 @@ async def async_setup_entry(
     devices = entry_data["devices"]
     models = entry_data.get("models", {})
     
-    # Get playlists
-    playlists = await api.get_playlists()
+    # Get playlists with custom labels
+    playlists = await api.get_playlists(hass)
     
     selects = []
     for device in devices:
@@ -130,7 +130,7 @@ class TRMNLPlaylistSelect(TRMNLSelectBase):
         """Refresh the playlist options from the server."""
         try:
             _LOGGER.debug("Refreshing playlists for device %s", self._device_id)
-            self._playlists = await self._api.get_playlists()
+            self._playlists = await self._api.get_playlists(self.hass)
             self._update_options()
             self.async_write_ha_state()
             _LOGGER.info("Refreshed playlists for device %s: %s", self._device_id, self._attr_options)

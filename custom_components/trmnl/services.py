@@ -5,10 +5,11 @@ import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv, device_registry as dr, entity_registry as er
+from homeassistant.helpers.storage import Store
 from homeassistant.exceptions import ServiceValidationError
 
 from .api import TRMNLApi
-from .const import DOMAIN
+from .const import DOMAIN, STORAGE_KEY, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -158,6 +159,18 @@ DEVICE_SETUP_SCHEMA = vol.Schema({
     vol.Optional("force_setup"): cv.boolean,
 })
 
+# === Playlist Label Management Services ===
+SET_PLAYLIST_LABEL_SCHEMA = vol.Schema({
+    vol.Required("playlist_id"): cv.string,
+    vol.Required("label"): cv.string,
+})
+
+REMOVE_PLAYLIST_LABEL_SCHEMA = vol.Schema({
+    vol.Required("playlist_id"): cv.string,
+})
+
+LIST_PLAYLIST_LABELS_SCHEMA = vol.Schema({})
+
 # === Playlist Naming Services ===
 UPDATE_PLAYLIST_NAME_SCHEMA = vol.Schema({
     vol.Required("playlist_id"): cv.string,
@@ -286,6 +299,50 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         })
         
         return UPDATE_PLAYLIST_NAME_SCHEMA, RESET_PLAYLIST_NAME_SCHEMA
+    
+    class PlaylistLabelManager:
+        """Manages local playlist label mappings."""
+        
+        def __init__(self, hass: HomeAssistant):
+            self.hass = hass
+            self.store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+            self._labels = {}
+            
+        async def async_load(self):
+            """Load playlist labels from storage."""
+            data = await self.store.async_load()
+            if data is not None:
+                self._labels = data.get("labels", {})
+            _LOGGER.debug("Loaded playlist labels: %s", self._labels)
+            
+        async def async_save(self):
+            """Save playlist labels to storage."""
+            await self.store.async_save({"labels": self._labels})
+            _LOGGER.debug("Saved playlist labels: %s", self._labels)
+            
+        async def set_label(self, playlist_id: str, label: str):
+            """Set a custom label for a playlist."""
+            playlist_id = str(playlist_id)
+            self._labels[playlist_id] = label
+            await self.async_save()
+            _LOGGER.info("Set playlist %s label to '%s'", playlist_id, label)
+            
+        async def remove_label(self, playlist_id: str):
+            """Remove a custom label for a playlist."""
+            playlist_id = str(playlist_id)
+            if playlist_id in self._labels:
+                del self._labels[playlist_id]
+                await self.async_save()
+                _LOGGER.info("Removed custom label for playlist %s", playlist_id)
+            
+        def get_label(self, playlist_id: str) -> str:
+            """Get the label for a playlist (custom or default)."""
+            playlist_id = str(playlist_id)
+            return self._labels.get(playlist_id, f"Playlist {playlist_id}")
+            
+        def get_all_labels(self) -> Dict[str, str]:
+            """Get all custom labels."""
+            return dict(self._labels)
     
     # === DEVICE MANAGEMENT SERVICES ===
     
@@ -633,6 +690,58 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         _LOGGER.info("Successfully reset playlist %s name to '%s'", playlist_id, default_name)
     
+    # === PLAYLIST LABEL MANAGEMENT SERVICES ===
+    
+    # Initialize the label manager
+    label_manager = PlaylistLabelManager(hass)
+    await label_manager.async_load()
+    
+    # Store label manager globally for API access
+    hass.data.setdefault(f"{DOMAIN}_label_manager", label_manager)
+    
+    async def handle_set_playlist_label(call: ServiceCall) -> None:
+        """Set a custom label for a playlist."""
+        playlist_id = call.data["playlist_id"]
+        label = call.data["label"]
+        
+        await label_manager.set_label(playlist_id, label)
+        
+        # Refresh playlist select entities to show updated labels
+        await refresh_playlist_selects()
+        
+        _LOGGER.info("Set playlist %s label to '%s'", playlist_id, label)
+    
+    async def handle_remove_playlist_label(call: ServiceCall) -> None:
+        """Remove a custom label for a playlist."""
+        playlist_id = call.data["playlist_id"]
+        
+        await label_manager.remove_label(playlist_id)
+        
+        # Refresh playlist select entities to show updated labels  
+        await refresh_playlist_selects()
+        
+        _LOGGER.info("Removed custom label for playlist %s", playlist_id)
+    
+    async def handle_list_playlist_labels(call: ServiceCall) -> None:
+        """List all custom playlist labels."""
+        labels = label_manager.get_all_labels()
+        
+        _LOGGER.info("Current playlist labels: %s", labels)
+        
+        # Create a persistent notification with the labels
+        notification_message = "**Current Playlist Labels:**\n"
+        if labels:
+            for playlist_id, label in labels.items():
+                notification_message += f"- Playlist {playlist_id}: {label}\n"
+        else:
+            notification_message += "No custom labels set."
+            
+        hass.components.persistent_notification.create(
+            notification_message,
+            title="TRMNL Playlist Labels",
+            notification_id="trmnl_playlist_labels"
+        )
+    
     # === REGISTER ALL SERVICES ===
     
     services = [
@@ -667,6 +776,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         # Setup
         ("device_setup", handle_device_setup, DEVICE_SETUP_SCHEMA),
+        
+        # Playlist Label Management
+        ("set_playlist_label", handle_set_playlist_label, SET_PLAYLIST_LABEL_SCHEMA),
+        ("remove_playlist_label", handle_remove_playlist_label, REMOVE_PLAYLIST_LABEL_SCHEMA),
+        ("list_playlist_labels", handle_list_playlist_labels, LIST_PLAYLIST_LABELS_SCHEMA),
         
         # Playlist Naming - TEMPORARILY DISABLED due to Terminus API limitations
         # The /api/playlists/{id} endpoints return HTTP 404, indicating these

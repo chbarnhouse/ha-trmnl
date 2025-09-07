@@ -14,3 +14,7 @@ DEFAULT_PORT = 2300
 DEFAULT_NAME = "TRMNL"
 
 # Services are now handled in services.py
+
+# Storage keys for playlist label mappings
+STORAGE_KEY = "trmnl_playlist_labels"
+STORAGE_VERSION = 1

@@ -762,3 +762,40 @@ reset_playlist_name:
             - "Playlist 4 (ID: 4)"
             - "Playlist 5 (ID: 5)"
           custom_value: true
+
+# === PLAYLIST LABEL MANAGEMENT SERVICES ===
+
+set_playlist_label:
+  name: Set Playlist Label
+  description: Set a custom label for a playlist (Home Assistant only)
+  fields:
+    playlist_id:
+      name: Playlist ID
+      description: The playlist ID to label (1, 2, 3, etc.)
+      required: true
+      selector:
+        text:
+      example: "1"
+    label:
+      name: Custom Label
+      description: The friendly name to display for this playlist
+      required: true
+      selector:
+        text:
+      example: "Morning Dashboard"
+
+remove_playlist_label:
+  name: Remove Playlist Label
+  description: Remove a custom label and return to default "Playlist X"
+  fields:
+    playlist_id:
+      name: Playlist ID
+      description: The playlist ID to remove label from
+      required: true
+      selector:
+        text:
+      example: "1"
+
+list_playlist_labels:
+  name: List Playlist Labels
+  description: Show all current custom playlist labels in a notification
