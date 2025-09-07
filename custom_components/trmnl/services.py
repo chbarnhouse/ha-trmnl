@@ -722,12 +722,19 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             playlist_id = call.data.get("playlist_id")
             label = call.data.get("label")
             
-            _LOGGER.debug("Configure playlists called with action=%s, playlist_id=%s, label=%s", action, playlist_id, label)
+            _LOGGER.info("Configure playlists called with action=%s, playlist_id=%s, label=%s", action, playlist_id, label)
             
-            # Get the label manager from hass.data
-            current_label_manager = hass.data.get(f"{DOMAIN}_label_manager")
+            # Get the label manager from hass.data using the service call's hass reference
+            service_hass = call.hass if hasattr(call, 'hass') else hass
+            current_label_manager = service_hass.data.get(f"{DOMAIN}_label_manager")
+            
             if not current_label_manager:
-                raise ServiceValidationError("Playlist label manager not initialized")
+                _LOGGER.error("Label manager not found in hass.data. Available keys: %s", list(service_hass.data.keys()))
+                # Try to initialize a new one
+                current_label_manager = PlaylistLabelManager(service_hass)
+                await current_label_manager.async_load()
+                service_hass.data[f"{DOMAIN}_label_manager"] = current_label_manager
+                _LOGGER.info("Created new label manager")
                 
         except Exception as e:
             _LOGGER.error("Error in configure_playlists service: %s", e, exc_info=True)
@@ -774,10 +781,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 notification_message += "No playlists configured in Home Assistant.\nOnly playlists detected from your TRMNL devices will be shown."
             
             # Check if persistent_notification component is available
-            if hasattr(hass.components, 'persistent_notification') and hass.components.persistent_notification:
-                hass.components.persistent_notification.create(
+            if hasattr(service_hass.components, 'persistent_notification') and service_hass.components.persistent_notification:
+                service_hass.components.persistent_notification.create(
                     notification_message,
-                    title="TRMNL Playlist Configuration",
+                    title="TRMNL Playlist Configuration", 
                     notification_id="trmnl_playlist_configuration"
                 )
             else:
