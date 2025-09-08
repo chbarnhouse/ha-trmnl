@@ -620,7 +620,7 @@ class TRMNLApi:
             return False
     
     async def send_screen_to_device(self, device_id: str, screen_id: str) -> bool:
-        """Send an existing screen to a device by creating a temporary playlist."""
+        """Send an existing screen to a device."""
         try:
             _LOGGER.info("Sending screen %s to device %s", screen_id, device_id)
             
@@ -637,7 +637,20 @@ class TRMNLApi:
                 _LOGGER.error("Could not find device %s", device_id)
                 return False
             
-            # Create a temporary playlist with just this screen
+            # Try direct screen assignment to device (for TRMNL servers without playlist support)
+            try:
+                _LOGGER.info("Attempting direct screen assignment to device %s", device_id)
+                success = await self.update_device(device_id, {"screen_id": str(screen_id)})
+                if success:
+                    _LOGGER.info("Successfully sent screen %s to device %s via direct assignment", screen_id, device_id)
+                    return True
+                else:
+                    _LOGGER.warning("Direct screen assignment failed, device may not support screen_id field")
+            except Exception as direct_error:
+                _LOGGER.warning("Direct screen assignment failed: %s", direct_error)
+            
+            # Fallback: Try to create a temporary playlist (original method)
+            _LOGGER.info("Trying playlist-based approach as fallback")
             playlist_data = {
                 "name": f"ha_screen_{device_id}_{int(datetime.now().timestamp())}",
                 "label": f"HA Screen {screen_id}",
@@ -646,7 +659,7 @@ class TRMNLApi:
             
             playlist_result = await self.create_playlist(playlist_data)
             if not playlist_result:
-                _LOGGER.error("Failed to create temporary playlist for screen %s", screen_id)
+                _LOGGER.error("Failed to create temporary playlist for screen %s - server may not support playlists", screen_id)
                 return False
             
             playlist_id = playlist_result.get('id')
@@ -655,7 +668,7 @@ class TRMNLApi:
             # Assign the playlist to the device
             success = await self.assign_device_to_playlist(device_id, str(playlist_id))
             if success:
-                _LOGGER.info("Successfully sent screen %s to device %s", screen_id, device_id)
+                _LOGGER.info("Successfully sent screen %s to device %s via playlist", screen_id, device_id)
                 return True
             else:
                 _LOGGER.error("Failed to assign screen playlist to device %s", device_id)
