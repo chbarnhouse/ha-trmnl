@@ -45,12 +45,14 @@ class DashboardCapture:
     
     async def __aenter__(self):
         """Async context manager entry."""
-        await self._setup_browser()
+        if PLAYWRIGHT_AVAILABLE:
+            await self._setup_browser()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
-        await self._cleanup_browser()
+        if PLAYWRIGHT_AVAILABLE:
+            await self._cleanup_browser()
     
     async def _setup_browser(self):
         """Setup Playwright browser for dashboard capture."""
@@ -119,7 +121,7 @@ class DashboardCapture:
                 margin_left, margin_right, rotation_angle
             )
         else:
-            # Use alternative method without Playwright
+            # Use alternative method without Playwright - no browser context needed
             return await self._capture_with_fallback(
                 dashboard_path, theme, width, height, orientation,
                 center_x_offset, center_y_offset, margin_top, margin_bottom,
@@ -272,13 +274,9 @@ class DashboardCapture:
                     draw.text((50, y_offset), line, fill="black")
                 y_offset += 30
             
-            # Process the image according to parameters
-            output_buffer = io.BytesIO()
-            img.save(output_buffer, format="PNG")
-            image_data = output_buffer.getvalue()
-            
-            processed_image_bytes = await self._process_image(
-                image_data,
+            # Process the image according to parameters (synchronous version for fallback)
+            processed_image_bytes = self._process_image_sync(
+                img,
                 orientation=orientation,
                 center_x_offset=center_x_offset,
                 center_y_offset=center_y_offset,
@@ -315,6 +313,67 @@ class DashboardCapture:
         
         # Load image
         img = Image.open(io.BytesIO(image_data))
+        
+        # Apply orientation
+        if orientation == "portrait":
+            img = img.rotate(90, expand=True)
+        elif orientation == "portrait_inverted":
+            img = img.rotate(-90, expand=True)
+        elif orientation == "landscape_inverted":
+            img = img.rotate(180, expand=True)
+        # landscape is default (no rotation)
+        
+        # Apply fine rotation angle if specified
+        if rotation_angle != 0.0:
+            img = img.rotate(rotation_angle, expand=True, fillcolor='white')
+        
+        # Apply margins by creating a new image with padding
+        if any([margin_top, margin_bottom, margin_left, margin_right]):
+            old_width, old_height = img.size
+            new_width = old_width + margin_left + margin_right
+            new_height = old_height + margin_top + margin_bottom
+            
+            new_img = Image.new("RGB", (new_width, new_height), "white")
+            new_img.paste(img, (margin_left, margin_top))
+            img = new_img
+        
+        # Apply center offsets by cropping/repositioning
+        if center_x_offset != 0 or center_y_offset != 0:
+            width, height = img.size
+            
+            # Calculate crop box with offsets
+            left = max(0, center_x_offset)
+            top = max(0, center_y_offset)
+            right = min(width, width + center_x_offset)
+            bottom = min(height, height + center_y_offset)
+            
+            # If offset would crop the image, create a new canvas
+            if left > 0 or top > 0 or right < width or bottom < height:
+                new_img = Image.new("RGB", (width, height), "white")
+                paste_x = max(0, -center_x_offset)
+                paste_y = max(0, -center_y_offset)
+                new_img.paste(img, (paste_x, paste_y))
+                img = new_img
+        
+        # Convert back to bytes
+        output_buffer = io.BytesIO()
+        img.save(output_buffer, format="PNG", optimize=True)
+        
+        return output_buffer.getvalue()
+    
+    def _process_image_sync(
+        self,
+        img: Image.Image,
+        orientation: str = "landscape",
+        center_x_offset: int = 0,
+        center_y_offset: int = 0,
+        margin_top: int = 0,
+        margin_bottom: int = 0,
+        margin_left: int = 0,
+        margin_right: int = 0,
+        rotation_angle: float = 0.0
+    ) -> bytes:
+        """Process image with orientation, positioning, margins, and rotation (synchronous version)."""
         
         # Apply orientation
         if orientation == "portrait":
@@ -1366,21 +1425,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # Initialize dashboard capture
             dashboard_capture = DashboardCapture(hass)
             
-            # Capture the dashboard
-            image_data = await dashboard_capture.capture_dashboard(
-                dashboard_path=dashboard_path,
-                theme=theme,
-                width=width,
-                height=height,
-                orientation=orientation,
-                center_x_offset=center_x_offset,
-                center_y_offset=center_y_offset,
-                margin_top=margin_top,
-                margin_bottom=margin_bottom,
-                margin_left=margin_left,
-                margin_right=margin_right,
-                rotation_angle=rotation_angle
-            )
+            # Capture the dashboard with appropriate method
+            try:
+                image_data = await dashboard_capture.capture_dashboard(
+                    dashboard_path=dashboard_path,
+                    theme=theme,
+                    width=width,
+                    height=height,
+                    orientation=orientation,
+                    center_x_offset=center_x_offset,
+                    center_y_offset=center_y_offset,
+                    margin_top=margin_top,
+                    margin_bottom=margin_bottom,
+                    margin_left=margin_left,
+                    margin_right=margin_right,
+                    rotation_angle=rotation_angle
+                )
+            except Exception as capture_error:
+                _LOGGER.error("Failed to initialize dashboard capture: %s", capture_error)
+                raise ServiceValidationError("Failed to initialize browser for dashboard capture")
             
             # Create a screen with the captured image
             screen_data = {
