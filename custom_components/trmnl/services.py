@@ -1262,9 +1262,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             
             # Create a screen with the captured image
             screen_data = {
+                "model_id": 1,  # Default TRMNL model ID
                 "name": f"Dashboard - {dashboard_path}",
-                "content": image_data,
-                "duration": 30  # Default 30 second display duration
+                "label": f"HA Dashboard {dashboard_path}",
+                "image_url": f"data:image/png;base64,{image_data}",
+                "preprocessed": True  # Image is already processed
             }
             
             screen_result = await api.create_screen(screen_data)
