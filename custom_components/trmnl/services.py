@@ -51,7 +51,10 @@ class DashboardCapture:
     async def _setup_browser(self):
         """Setup Playwright browser for dashboard capture."""
         if not PLAYWRIGHT_AVAILABLE:
-            raise ImportError("Playwright is not available. Dashboard capture requires Playwright to be installed.")
+            raise ImportError(
+                "Playwright is not available. Dashboard capture requires Playwright to be installed. "
+                "For Home Assistant OS, try restarting Home Assistant to retry dependency installation."
+            )
         
         try:
             self._playwright = await async_playwright().start()
@@ -1326,12 +1329,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         # ("reset_playlist_name", handle_reset_playlist_name, None),
     ]
     
-    # Add dashboard capture service if Playwright is available
+    # Always add dashboard capture service - will show helpful error if Playwright unavailable
+    services.append(("send_dashboard_to_device", handle_send_dashboard_to_device, SEND_DASHBOARD_SCHEMA))
+    
     if PLAYWRIGHT_AVAILABLE:
-        services.append(("send_dashboard_to_device", handle_send_dashboard_to_device, SEND_DASHBOARD_SCHEMA))
         _LOGGER.info("Dashboard capture service enabled (Playwright available)")
     else:
-        _LOGGER.warning("Dashboard capture service disabled - Playwright not available")
+        _LOGGER.warning("Dashboard capture service registered but Playwright not available - service will show installation instructions")
     
     # Playlist naming services temporarily disabled - skip dynamic schema building
     # Get playlist data for dynamic schemas
