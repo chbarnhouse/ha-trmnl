@@ -13,8 +13,15 @@ import io
 import tempfile
 from pathlib import Path
 from datetime import datetime
-from playwright.async_api import async_playwright
 from PIL import Image, ImageOps
+
+# Optional Playwright import for dashboard capture
+try:
+    from playwright.async_api import async_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    async_playwright = None
 
 from .api import TRMNLApi
 from .const import DOMAIN, STORAGE_KEY, STORAGE_VERSION
@@ -43,6 +50,9 @@ class DashboardCapture:
     
     async def _setup_browser(self):
         """Setup Playwright browser for dashboard capture."""
+        if not PLAYWRIGHT_AVAILABLE:
+            raise ImportError("Playwright is not available. Dashboard capture requires Playwright to be installed.")
+        
         try:
             self._playwright = await async_playwright().start()
             self._browser = await self._playwright.chromium.launch(
@@ -1197,6 +1207,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_send_dashboard_to_device(call: ServiceCall) -> None:
         """Capture a Home Assistant dashboard and send it to a TRMNL device."""
         try:
+            # Check if Playwright is available
+            if not PLAYWRIGHT_AVAILABLE:
+                raise ServiceValidationError(
+                    "Dashboard capture is not available. Playwright could not be installed on your system. "
+                    "This feature requires Playwright for browser automation. "
+                    "Please check the Home Assistant logs for installation errors."
+                )
+            
             api = get_api_instance()
             device_friendly_id = get_device_friendly_id(call.data["device_id"])
             dashboard_path = call.data["dashboard_path"]
@@ -1301,15 +1319,19 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         # Playlist Configuration
         ("configure_playlists", handle_configure_playlists, CONFIGURE_PLAYLISTS_SCHEMA),
         
-        # Dashboard Capture
-        ("send_dashboard_to_device", handle_send_dashboard_to_device, SEND_DASHBOARD_SCHEMA),
-        
         # Playlist Naming - TEMPORARILY DISABLED due to Terminus API limitations
         # The /api/playlists/{id} endpoints return HTTP 404, indicating these
         # features are not supported by the current Terminus server
         # ("update_playlist_name", handle_update_playlist_name, None),
         # ("reset_playlist_name", handle_reset_playlist_name, None),
     ]
+    
+    # Add dashboard capture service if Playwright is available
+    if PLAYWRIGHT_AVAILABLE:
+        services.append(("send_dashboard_to_device", handle_send_dashboard_to_device, SEND_DASHBOARD_SCHEMA))
+        _LOGGER.info("Dashboard capture service enabled (Playwright available)")
+    else:
+        _LOGGER.warning("Dashboard capture service disabled - Playwright not available")
     
     # Playlist naming services temporarily disabled - skip dynamic schema building
     # Get playlist data for dynamic schemas
