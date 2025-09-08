@@ -1260,14 +1260,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 _LOGGER.error("Failed to initialize dashboard capture: %s", capture_error)
                 raise ServiceValidationError("Failed to initialize browser for dashboard capture")
             
-            # Create a screen with the captured image
+            # Create a screen with the captured image (sanitize path for filename)
+            safe_path = dashboard_path.replace("/", "_").replace("\\", "_")
             screen_data = {
                 "model_id": 1,  # Default TRMNL model ID
-                "name": f"Dashboard - {dashboard_path}",
+                "name": f"Dashboard_{safe_path}",
                 "label": f"HA Dashboard {dashboard_path}",
                 "image": {
                     "model_id": 1,
-                    "name": f"Dashboard - {dashboard_path}",
+                    "name": f"Dashboard_{safe_path}",
                     "label": f"HA Dashboard {dashboard_path}",
                     "data": image_data
                 },
