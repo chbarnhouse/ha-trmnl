@@ -1289,6 +1289,32 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             
             _LOGGER.info("Attempting screen creation with optimized format")
             
+            # First, test if the server supports screens at all
+            try:
+                _LOGGER.info("Testing if server supports /api/screens endpoint...")
+                existing_screens = await api.get_screens()
+                _LOGGER.info("Server supports screens endpoint, found %d existing screens", len(existing_screens))
+            except Exception as screen_test_error:
+                _LOGGER.error("Server may not support /api/screens endpoint: %s", screen_test_error)
+                
+                # Try alternative: direct device update with image data
+                _LOGGER.info("Attempting direct device update with image data instead")
+                try:
+                    success = await api.update_device(device_friendly_id, {
+                        "image_data": image_data,
+                        "screen_name": unique_name,
+                        "screen_label": f"HA Dashboard {dashboard_path}"
+                    })
+                    if success:
+                        _LOGGER.info("Successfully updated device %s with direct image data", device_friendly_id)
+                        return  # Skip the rest of screen creation process
+                    else:
+                        _LOGGER.warning("Direct device image update failed")
+                except Exception as direct_error:
+                    _LOGGER.warning("Direct device image update failed: %s", direct_error)
+                
+                raise ServiceValidationError(f"TRMNL server does not support screen creation - tried screens API and direct update")
+            
             screen_result = await api.create_screen(screen_data)
             if not screen_result:
                 raise ServiceValidationError(f"Failed to create screen for dashboard {dashboard_path}")
