@@ -397,6 +397,17 @@ class TRMNLApi:
         """Create a new screen in Terminus."""
         try:
             _LOGGER.info("Creating screen: %s", screen_data.get('name', 'unknown'))
+            
+            # Log the full screen data being sent (truncate image data for readability)
+            debug_data = screen_data.copy()
+            if 'image' in debug_data and 'data' in debug_data['image']:
+                debug_data['image'] = debug_data['image'].copy()
+                debug_data['image']['data'] = f"<base64 data {len(debug_data['image']['data'])} chars>"
+            if 'image_url' in debug_data and debug_data['image_url'].startswith('data:'):
+                debug_data['image_url'] = f"<data URL {len(debug_data['image_url'])} chars>"
+            
+            _LOGGER.info("Screen data being sent: %s", debug_data)
+            
             result = await self._make_request("/api/screens", method="POST", data=screen_data)
             if result:
                 _LOGGER.info("Successfully created screen")

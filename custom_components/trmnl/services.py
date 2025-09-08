@@ -1266,23 +1266,55 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             timestamp = int(datetime.now().timestamp())
             unique_name = f"Dashboard_{safe_path}_{timestamp}"
             
-            screen_data = {
-                "model_id": 1,  # Default TRMNL model ID
-                "name": unique_name,
-                "label": f"HA Dashboard {dashboard_path}",
-                "image": {
+            # Try different screen data formats to find what works with this server
+            screen_data_options = [
+                # Option 1: Simple image_url only 
+                {
                     "model_id": 1,
                     "name": unique_name,
                     "label": f"HA Dashboard {dashboard_path}",
-                    "data": image_data
+                    "image_url": f"data:image/png;base64,{image_data}"
                 },
-                "image_url": f"data:image/png;base64,{image_data}",
-                "preprocessed": True  # Image is already processed
-            }
+                # Option 2: Simple image object only
+                {
+                    "model_id": 1,
+                    "name": unique_name,
+                    "label": f"HA Dashboard {dashboard_path}",
+                    "image": {
+                        "name": unique_name,
+                        "data": image_data
+                    }
+                },
+                # Option 3: Both (our previous complex format)
+                {
+                    "model_id": 1,
+                    "name": unique_name,
+                    "label": f"HA Dashboard {dashboard_path}",
+                    "image": {
+                        "model_id": 1,
+                        "name": unique_name,
+                        "label": f"HA Dashboard {dashboard_path}",
+                        "data": image_data
+                    },
+                    "image_url": f"data:image/png;base64,{image_data}",
+                    "preprocessed": True
+                }
+            ]
             
-            screen_result = await api.create_screen(screen_data)
+            screen_result = None
+            for i, screen_data in enumerate(screen_data_options):
+                try:
+                    _LOGGER.info("Attempting screen creation with format %d", i + 1)
+                    screen_result = await api.create_screen(screen_data)
+                    if screen_result:
+                        _LOGGER.info("Screen creation succeeded with format %d", i + 1)
+                        break
+                except Exception as format_error:
+                    _LOGGER.warning("Screen creation format %d failed: %s", i + 1, format_error)
+                    continue
+            
             if not screen_result:
-                raise ServiceValidationError(f"Failed to create screen for dashboard {dashboard_path}")
+                raise ServiceValidationError(f"Failed to create screen for dashboard {dashboard_path} - all formats failed")
             
             screen_id = screen_result.get('id')
             _LOGGER.info("Successfully created screen %s with dashboard capture", screen_id)
