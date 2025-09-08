@@ -76,7 +76,11 @@ class TRMNLApi:
                 _LOGGER.debug("Response is not JSON from %s", url)
                 return {"status": "ok", "content_type": "text"}
         else:
-            _LOGGER.warning("HTTP %s from %s", response.status, url)
+            try:
+                error_data = await response.text()
+                _LOGGER.warning("HTTP %s from %s: %s", response.status, url, error_data)
+            except Exception:
+                _LOGGER.warning("HTTP %s from %s", response.status, url)
             return None
             
     async def get_devices(self) -> List[Dict]:
@@ -393,7 +397,7 @@ class TRMNLApi:
         """Create a new screen in Terminus."""
         try:
             _LOGGER.info("Creating screen: %s", screen_data.get('name', 'unknown'))
-            result = await self._make_request("/api/screens", method="POST", data={"image": screen_data})
+            result = await self._make_request("/api/screens", method="POST", data=screen_data)
             if result:
                 _LOGGER.info("Successfully created screen")
                 return result.get("data")
@@ -406,7 +410,7 @@ class TRMNLApi:
         """Update a screen in Terminus."""
         try:
             _LOGGER.info("Updating screen %s", screen_id)
-            result = await self._make_request(f"/api/screens/{screen_id}", method="PATCH", data={"image": screen_data})
+            result = await self._make_request(f"/api/screens/{screen_id}", method="PATCH", data=screen_data)
             if result:
                 _LOGGER.info("Successfully updated screen %s", screen_id)
                 return True
