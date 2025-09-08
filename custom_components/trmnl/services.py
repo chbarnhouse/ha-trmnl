@@ -2,6 +2,7 @@
 import logging
 from typing import Dict, Any, Optional
 import voluptuous as vol
+from datetime import datetime
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv, device_registry as dr, entity_registry as er
@@ -1262,13 +1263,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             
             # Create a screen with the captured image (sanitize path for filename)
             safe_path = dashboard_path.replace("/", "_").replace("\\", "_")
+            timestamp = int(datetime.now().timestamp())
+            unique_name = f"Dashboard_{safe_path}_{timestamp}"
+            
             screen_data = {
                 "model_id": 1,  # Default TRMNL model ID
-                "name": f"Dashboard_{safe_path}",
+                "name": unique_name,
                 "label": f"HA Dashboard {dashboard_path}",
                 "image": {
                     "model_id": 1,
-                    "name": f"Dashboard_{safe_path}",
+                    "name": unique_name,
                     "label": f"HA Dashboard {dashboard_path}",
                     "data": image_data
                 },
