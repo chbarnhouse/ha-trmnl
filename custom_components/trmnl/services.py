@@ -233,7 +233,11 @@ class DashboardCapture:
             # implement a more sophisticated capture method
             
             # Create a simple text-based image as a placeholder
-            img = Image.new("RGB", (width, height), color="white")
+            # Use smaller dimensions for testing to avoid server size limits
+            test_width = min(width, 320)
+            test_height = min(height, 240)
+            img = Image.new("RGB", (test_width, test_height), color="white")
+            _LOGGER.info("Creating test image: %dx%d (requested %dx%d)", test_width, test_height, width, height)
             
             # You could enhance this by:
             # 1. Fetching dashboard HTML and parsing it
@@ -291,6 +295,7 @@ class DashboardCapture:
             # Convert to base64 for TRMNL API
             image_base64 = base64.b64encode(processed_image_bytes).decode('utf-8')
             _LOGGER.info("Dashboard capture completed with fallback method")
+            _LOGGER.info("Generated image: %d bytes raw, %d chars base64", len(processed_image_bytes), len(image_base64))
             
             return image_base64
             
@@ -1266,6 +1271,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             timestamp = int(datetime.now().timestamp())
             unique_name = f"Dashboard_{safe_path}_{timestamp}"
             
+            # Log image data stats before sending
+            _LOGGER.info("Screen creation - Image data size: %d characters", len(image_data))
+            
             # Based on diagnostics, this server expects format with image object containing model_id and label
             screen_data = {
                 "model_id": 1,
@@ -1278,6 +1286,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     "data": image_data
                 }
             }
+            
+            _LOGGER.info("Attempting screen creation with optimized format")
             
             screen_result = await api.create_screen(screen_data)
             if not screen_result:
