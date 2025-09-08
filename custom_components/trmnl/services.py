@@ -1265,10 +1265,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 "model_id": 1,  # Default TRMNL model ID
                 "name": f"Dashboard - {dashboard_path}",
                 "label": f"HA Dashboard {dashboard_path}",
-                "image": {
-                    "data": image_data,
-                    "type": "image/png"
-                },
+                "image_url": f"data:image/png;base64,{image_data}",
                 "preprocessed": True  # Image is already processed
             }
             
