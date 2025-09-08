@@ -23,6 +23,10 @@ except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     async_playwright = None
 
+# Alternative imports for basic dashboard capture
+import aiohttp
+from urllib.parse import urljoin
+
 from .api import TRMNLApi
 from .const import DOMAIN, STORAGE_KEY, STORAGE_VERSION
 
@@ -107,6 +111,38 @@ class DashboardCapture:
     ) -> bytes:
         """Capture a Home Assistant dashboard and return processed image data."""
         
+        if PLAYWRIGHT_AVAILABLE:
+            # Use Playwright for full browser automation
+            return await self._capture_with_playwright(
+                dashboard_path, theme, width, height, orientation,
+                center_x_offset, center_y_offset, margin_top, margin_bottom,
+                margin_left, margin_right, rotation_angle
+            )
+        else:
+            # Use alternative method without Playwright
+            return await self._capture_with_fallback(
+                dashboard_path, theme, width, height, orientation,
+                center_x_offset, center_y_offset, margin_top, margin_bottom,
+                margin_left, margin_right, rotation_angle
+            )
+    
+    async def _capture_with_playwright(
+        self,
+        dashboard_path: str,
+        theme: str = None,
+        width: int = 800,
+        height: int = 480,
+        orientation: str = "landscape",
+        center_x_offset: int = 0,
+        center_y_offset: int = 0,
+        margin_top: int = 0,
+        margin_bottom: int = 0,
+        margin_left: int = 0,
+        margin_right: int = 0,
+        rotation_angle: float = 0.0
+    ) -> bytes:
+        """Capture dashboard using Playwright browser automation."""
+        
         async with self:  # Use context manager for browser lifecycle
             try:
                 # Get Home Assistant URL
@@ -122,7 +158,7 @@ class DashboardCapture:
                     separator = "&" if "?" in dashboard_url else "?"
                     dashboard_url += f"{separator}theme={theme}"
                 
-                _LOGGER.info("Capturing dashboard: %s", dashboard_url)
+                _LOGGER.info("Capturing dashboard with Playwright: %s", dashboard_url)
                 
                 # Create new page
                 page = await self._context.new_page()
@@ -161,13 +197,107 @@ class DashboardCapture:
                 
                 # Convert to base64 for TRMNL API
                 image_base64 = base64.b64encode(processed_image_bytes).decode('utf-8')
-                _LOGGER.info("Dashboard capture completed successfully")
+                _LOGGER.info("Dashboard capture completed successfully with Playwright")
                 
                 return image_base64
                 
             except Exception as e:
-                _LOGGER.error("Error capturing dashboard: %s", e)
+                _LOGGER.error("Error capturing dashboard with Playwright: %s", e)
                 raise
+    
+    async def _capture_with_fallback(
+        self,
+        dashboard_path: str,
+        theme: str = None,
+        width: int = 800,
+        height: int = 480,
+        orientation: str = "landscape",
+        center_x_offset: int = 0,
+        center_y_offset: int = 0,
+        margin_top: int = 0,
+        margin_bottom: int = 0,
+        margin_left: int = 0,
+        margin_right: int = 0,
+        rotation_angle: float = 0.0
+    ) -> bytes:
+        """Capture dashboard using fallback method without Playwright."""
+        
+        try:
+            _LOGGER.info("Using fallback dashboard capture method (Playwright not available)")
+            
+            # Create a placeholder image with dashboard information
+            # This is a basic fallback - in a production system you might want to
+            # implement a more sophisticated capture method
+            
+            # Create a simple text-based image as a placeholder
+            img = Image.new("RGB", (width, height), color="white")
+            
+            # You could enhance this by:
+            # 1. Fetching dashboard HTML and parsing it
+            # 2. Using a lightweight rendering engine
+            # 3. Creating informative placeholder content
+            # 4. Connecting to external screenshot services
+            
+            # For now, create a placeholder with useful information
+            from PIL import ImageDraw, ImageFont
+            
+            draw = ImageDraw.Draw(img)
+            
+            # Try to use a basic font
+            try:
+                # This will work on most systems
+                font = ImageFont.load_default()
+            except:
+                font = None
+            
+            # Add text information
+            text_lines = [
+                "TRMNL Dashboard Capture",
+                f"Path: {dashboard_path}",
+                f"Theme: {theme or 'default'}",
+                f"Size: {width}x{height}",
+                "",
+                "Playwright not available",
+                "Using fallback method",
+                "",
+                "To enable full capture:",
+                "Install Playwright manually"
+            ]
+            
+            y_offset = 50
+            for line in text_lines:
+                if font:
+                    draw.text((50, y_offset), line, fill="black", font=font)
+                else:
+                    draw.text((50, y_offset), line, fill="black")
+                y_offset += 30
+            
+            # Process the image according to parameters
+            output_buffer = io.BytesIO()
+            img.save(output_buffer, format="PNG")
+            image_data = output_buffer.getvalue()
+            
+            processed_image_bytes = await self._process_image(
+                image_data,
+                orientation=orientation,
+                center_x_offset=center_x_offset,
+                center_y_offset=center_y_offset,
+                margin_top=margin_top,
+                margin_bottom=margin_bottom,
+                margin_left=margin_left,
+                margin_right=margin_right,
+                rotation_angle=rotation_angle
+            )
+            
+            # Convert to base64 for TRMNL API
+            image_base64 = base64.b64encode(processed_image_bytes).decode('utf-8')
+            _LOGGER.info("Dashboard capture completed with fallback method")
+            
+            return image_base64
+            
+        except Exception as e:
+            _LOGGER.error("Error in fallback dashboard capture: %s", e)
+            raise
     
     async def _process_image(
         self,
@@ -1210,13 +1340,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_send_dashboard_to_device(call: ServiceCall) -> None:
         """Capture a Home Assistant dashboard and send it to a TRMNL device."""
         try:
-            # Check if Playwright is available
-            if not PLAYWRIGHT_AVAILABLE:
-                raise ServiceValidationError(
-                    "Dashboard capture is not available. Playwright could not be installed on your system. "
-                    "This feature requires Playwright for browser automation. "
-                    "Please check the Home Assistant logs for installation errors."
-                )
             
             api = get_api_instance()
             device_friendly_id = get_device_friendly_id(call.data["device_id"])
