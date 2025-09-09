@@ -1288,8 +1288,87 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             }
             
             # Skip screens API entirely - this server version appears to not support it
-            # Try direct device update with image data instead
-            _LOGGER.info("Attempting direct device update with image data (bypassing screens API)")
+            # First try to upload the image separately, then reference it
+            _LOGGER.info("Attempting image upload and device update approach")
+            
+            # Try uploading image as a file first
+            try:
+                # Convert base64 back to bytes for upload
+                image_bytes = base64.b64decode(image_data)
+                
+                # Try uploading image via different endpoints
+                upload_attempts = [
+                    "/api/images",
+                    "/api/uploads", 
+                    "/api/files",
+                    "/api/media"
+                ]
+                
+                uploaded_image_id = None
+                for upload_endpoint in upload_attempts:
+                    try:
+                        _LOGGER.info("Trying image upload to %s", upload_endpoint)
+                        
+                        # Create multipart form data
+                        import aiohttp
+                        session = await api._get_session()
+                        
+                        data = aiohttp.FormData()
+                        data.add_field('file', image_bytes, 
+                                     filename=f"{unique_name}.png", 
+                                     content_type='image/png')
+                        data.add_field('name', unique_name)
+                        data.add_field('label', f"HA Dashboard {dashboard_path}")
+                        
+                        async with session.post(f"{api.base_url}{upload_endpoint}", 
+                                              data=data) as response:
+                            if response.status in [200, 201]:
+                                result = await response.json()
+                                uploaded_image_id = result.get('id') or result.get('data', {}).get('id')
+                                if uploaded_image_id:
+                                    _LOGGER.info("Successfully uploaded image via %s, ID: %s", upload_endpoint, uploaded_image_id)
+                                    break
+                            else:
+                                _LOGGER.warning("Image upload to %s failed: %d", upload_endpoint, response.status)
+                    except Exception as upload_error:
+                        _LOGGER.warning("Image upload to %s failed: %s", upload_endpoint, upload_error)
+                        continue
+                
+                if uploaded_image_id:
+                    # Now try to assign the uploaded image to the device
+                    _LOGGER.info("Attempting to assign uploaded image %s to device", uploaded_image_id)
+                    
+                    assignment_attempts = [
+                        {"image_id": uploaded_image_id, "label": f"HA Dashboard {dashboard_path}"},
+                        {"current_image_id": uploaded_image_id, "name": unique_name},
+                        {"display_image_id": uploaded_image_id},
+                        {"active_image": uploaded_image_id, "refresh": True}
+                    ]
+                    
+                    for i, assignment_data in enumerate(assignment_attempts):
+                        try:
+                            _LOGGER.info("Trying image assignment method %d", i + 1)
+                            result = await api.update_device(device_friendly_id, assignment_data)
+                            if result:
+                                _LOGGER.info("Successfully assigned uploaded image to device (method %d)", i + 1)
+                                
+                                # Trigger refresh
+                                try:
+                                    await api.refresh_device(device_friendly_id)
+                                    _LOGGER.info("Device refresh triggered - uploaded image should display")
+                                except:
+                                    pass
+                                    
+                                return  # Success!
+                        except Exception as assign_error:
+                            _LOGGER.warning("Image assignment method %d failed: %s", i + 1, assign_error)
+                            continue
+                
+            except Exception as upload_process_error:
+                _LOGGER.warning("Image upload process failed: %s", upload_process_error)
+            
+            # Fallback to direct device update with image data
+            _LOGGER.info("Falling back to direct device update with image data")
             
             direct_update_attempts = [
                 # Attempt 1: Try with image_data field + force refresh
