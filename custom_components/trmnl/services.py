@@ -1287,63 +1287,50 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 }
             }
             
-            # Based on extensive testing, this TRMNL server version does not support:
-            # - Dynamic screen creation via /api/screens  
-            # - Image upload and assignment
-            # - Playlist management
-            # 
-            # It only supports device metadata updates (labels, settings)
-            # Provide a helpful service that documents this limitation
+            # Based on user feedback, some screens WERE created in earlier attempts!
+            # This means the /api/screens endpoint DOES work, but our format was causing 500 errors
+            # Let's go back to the screens API with a simpler, cleaner format
             
-            _LOGGER.warning("TRMNL Server Compatibility Notice:")
-            _LOGGER.warning("Your TRMNL server version does not support dynamic screen creation.")
-            _LOGGER.warning("The dashboard capture service can only update device labels, not create actual screens.")
-            _LOGGER.warning("")
-            _LOGGER.warning("What IS supported:")
-            _LOGGER.warning("- Device label updates (working)")
-            _LOGGER.warning("- Device settings management") 
-            _LOGGER.warning("- Basic device information")
-            _LOGGER.warning("")
-            _LOGGER.warning("What is NOT supported:")
-            _LOGGER.warning("- Dynamic screen creation (/api/screens returns 500 errors)")
-            _LOGGER.warning("- Image upload and assignment")
-            _LOGGER.warning("- Playlist management (/api/playlists returns 404)")
-            _LOGGER.warning("")
-            _LOGGER.warning("Alternatives:")
-            _LOGGER.warning("1. Manually create screens in TRMNL web interface")
-            _LOGGER.warning("2. Use static images instead of dynamic dashboard captures") 
-            _LOGGER.warning("3. Upgrade to a newer TRMNL server version that supports these APIs")
-            _LOGGER.warning("")
+            _LOGGER.info("Returning to screens API approach - user reports some screens were created earlier")
+            _LOGGER.info("Attempting screen creation with minimal, clean format")
             
-            # Update device label with dashboard information (only thing that works)
-            try:
-                result = await api.update_device(device_friendly_id, {
-                    "label": f"HA Dashboard {dashboard_path}"
-                })
-                if result:
-                    _LOGGER.info("Updated device label to indicate dashboard: %s", dashboard_path)
-                    _LOGGER.info("Note: This server does not support dynamic screen creation")
-                    _LOGGER.info("To display dashboard content, manually create screens in TRMNL web interface")
-                else:
-                    _LOGGER.error("Failed to update device label")
-                    
-            except Exception as update_error:
-                _LOGGER.error("Failed to update device: %s", update_error)
-                raise ServiceValidationError(f"Failed to update device {device_friendly_id}: {update_error}")
+            # Try a very simple screen format (like what worked in earlier versions)
+            simple_screen_data = {
+                "name": unique_name,
+                "label": f"HA Dashboard {dashboard_path}",
+                "image": {
+                    "data": image_data
+                }
+            }
             
-            # Don't run the screen creation code below - we know it doesn't work
-            _LOGGER.info("Dashboard capture service completed (label update only)")
-            return
+            _LOGGER.info("Attempting screen creation with minimal format")
+            screen_result = await api.create_screen(simple_screen_data)
             
-            # This code should not execute now, but keep it as fallback
-            screen_result = await api.create_screen(screen_data)
+            if not screen_result:
+                _LOGGER.warning("Simple format failed, trying with model_id")
+                # Try with model_id as we know this was required
+                enhanced_screen_data = {
+                    "model_id": 1,
+                    "name": unique_name,
+                    "label": f"HA Dashboard {dashboard_path}",
+                    "image": {
+                        "model_id": 1,
+                        "name": unique_name,
+                        "label": f"HA Dashboard {dashboard_path}",
+                        "data": image_data
+                    }
+                }
+                
+                screen_result = await api.create_screen(enhanced_screen_data)
+                
             if not screen_result:
                 raise ServiceValidationError(f"Failed to create screen for dashboard {dashboard_path}")
             
             screen_id = screen_result.get('id')
             _LOGGER.info("Successfully created screen %s with dashboard capture", screen_id)
             
-            # Send the screen to the device
+            # Send the screen to the device using our direct assignment method (which worked)
+            _LOGGER.info("Attempting to assign screen %s to device %s", screen_id, device_friendly_id)
             success = await api.send_screen_to_device(device_friendly_id, screen_id)
             if not success:
                 raise ServiceValidationError(f"Failed to send dashboard screen to device {device_friendly_id}")
