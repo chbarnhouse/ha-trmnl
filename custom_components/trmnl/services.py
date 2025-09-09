@@ -1287,174 +1287,53 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 }
             }
             
-            # Skip screens API entirely - this server version appears to not support it
-            # First try to upload the image separately, then reference it
-            _LOGGER.info("Attempting image upload and device update approach")
+            # Based on extensive testing, this TRMNL server version does not support:
+            # - Dynamic screen creation via /api/screens  
+            # - Image upload and assignment
+            # - Playlist management
+            # 
+            # It only supports device metadata updates (labels, settings)
+            # Provide a helpful service that documents this limitation
             
-            # Try uploading image as a file first
+            _LOGGER.warning("TRMNL Server Compatibility Notice:")
+            _LOGGER.warning("Your TRMNL server version does not support dynamic screen creation.")
+            _LOGGER.warning("The dashboard capture service can only update device labels, not create actual screens.")
+            _LOGGER.warning("")
+            _LOGGER.warning("What IS supported:")
+            _LOGGER.warning("- Device label updates (working)")
+            _LOGGER.warning("- Device settings management") 
+            _LOGGER.warning("- Basic device information")
+            _LOGGER.warning("")
+            _LOGGER.warning("What is NOT supported:")
+            _LOGGER.warning("- Dynamic screen creation (/api/screens returns 500 errors)")
+            _LOGGER.warning("- Image upload and assignment")
+            _LOGGER.warning("- Playlist management (/api/playlists returns 404)")
+            _LOGGER.warning("")
+            _LOGGER.warning("Alternatives:")
+            _LOGGER.warning("1. Manually create screens in TRMNL web interface")
+            _LOGGER.warning("2. Use static images instead of dynamic dashboard captures") 
+            _LOGGER.warning("3. Upgrade to a newer TRMNL server version that supports these APIs")
+            _LOGGER.warning("")
+            
+            # Update device label with dashboard information (only thing that works)
             try:
-                # Convert base64 back to bytes for upload
-                image_bytes = base64.b64decode(image_data)
-                
-                # Try uploading image via different endpoints
-                upload_attempts = [
-                    "/api/images",
-                    "/api/uploads", 
-                    "/api/files",
-                    "/api/media"
-                ]
-                
-                uploaded_image_id = None
-                for upload_endpoint in upload_attempts:
-                    try:
-                        _LOGGER.info("Trying image upload to %s", upload_endpoint)
-                        
-                        # Create multipart form data
-                        import aiohttp
-                        session = await api._get_session()
-                        
-                        data = aiohttp.FormData()
-                        data.add_field('file', image_bytes, 
-                                     filename=f"{unique_name}.png", 
-                                     content_type='image/png')
-                        data.add_field('name', unique_name)
-                        data.add_field('label', f"HA Dashboard {dashboard_path}")
-                        
-                        async with session.post(f"{api.base_url}{upload_endpoint}", 
-                                              data=data) as response:
-                            if response.status in [200, 201]:
-                                result = await response.json()
-                                uploaded_image_id = result.get('id') or result.get('data', {}).get('id')
-                                if uploaded_image_id:
-                                    _LOGGER.info("Successfully uploaded image via %s, ID: %s", upload_endpoint, uploaded_image_id)
-                                    break
-                            else:
-                                _LOGGER.warning("Image upload to %s failed: %d", upload_endpoint, response.status)
-                    except Exception as upload_error:
-                        _LOGGER.warning("Image upload to %s failed: %s", upload_endpoint, upload_error)
-                        continue
-                
-                if uploaded_image_id:
-                    # Now try to assign the uploaded image to the device
-                    _LOGGER.info("Attempting to assign uploaded image %s to device", uploaded_image_id)
-                    
-                    assignment_attempts = [
-                        {"image_id": uploaded_image_id, "label": f"HA Dashboard {dashboard_path}"},
-                        {"current_image_id": uploaded_image_id, "name": unique_name},
-                        {"display_image_id": uploaded_image_id},
-                        {"active_image": uploaded_image_id, "refresh": True}
-                    ]
-                    
-                    for i, assignment_data in enumerate(assignment_attempts):
-                        try:
-                            _LOGGER.info("Trying image assignment method %d", i + 1)
-                            result = await api.update_device(device_friendly_id, assignment_data)
-                            if result:
-                                _LOGGER.info("Successfully assigned uploaded image to device (method %d)", i + 1)
-                                
-                                # Trigger refresh
-                                try:
-                                    await api.refresh_device(device_friendly_id)
-                                    _LOGGER.info("Device refresh triggered - uploaded image should display")
-                                except:
-                                    pass
-                                    
-                                return  # Success!
-                        except Exception as assign_error:
-                            _LOGGER.warning("Image assignment method %d failed: %s", i + 1, assign_error)
-                            continue
-                
-            except Exception as upload_process_error:
-                _LOGGER.warning("Image upload process failed: %s", upload_process_error)
-            
-            # Fallback to direct device update with image data
-            _LOGGER.info("Falling back to direct device update with image data")
-            
-            direct_update_attempts = [
-                # Attempt 1: Try with image_data field + force refresh
-                {
-                    "image_data": image_data,
-                    "screen_name": unique_name,
-                    "screen_label": f"HA Dashboard {dashboard_path}",
-                    "label": f"HA Dashboard {dashboard_path}",
-                    "refresh": True,
-                    "force_update": True
-                },
-                # Attempt 2: Try with image_url field (data URL) + refresh trigger
-                {
-                    "image_url": f"data:image/png;base64,{image_data}",
-                    "screen_name": unique_name,
-                    "screen_label": f"HA Dashboard {dashboard_path}",
-                    "label": f"HA Dashboard {dashboard_path}",
-                    "force_refresh": True
-                },
-                # Attempt 3: Try with current_image field + display trigger
-                {
-                    "current_image": image_data,
-                    "name": unique_name,
-                    "label": f"HA Dashboard {dashboard_path}",
-                    "display_now": True,
-                    "show_image": True
-                },
-                # Attempt 4: Try with display_content field + immediate display
-                {
-                    "display_content": {
-                        "image_data": image_data,
-                        "type": "image",
-                        "format": "png"
-                    },
-                    "name": unique_name,
-                    "label": f"HA Dashboard {dashboard_path}",
-                    "immediate_display": True
-                },
-                # Attempt 5: Try setting current screen ID directly
-                {
-                    "current_screen_data": image_data,
-                    "current_screen_name": unique_name,
-                    "label": f"HA Dashboard {dashboard_path}",
-                    "update_display": True
-                },
-                # Attempt 6: Try with content field (like web API)
-                {
-                    "content": image_data,
-                    "content_type": "image/png",
-                    "name": unique_name,
+                result = await api.update_device(device_friendly_id, {
                     "label": f"HA Dashboard {dashboard_path}"
-                }
-            ]
-            
-            success = False
-            for i, update_data in enumerate(direct_update_attempts):
-                try:
-                    _LOGGER.info("Trying direct device update method %d", i + 1)
-                    result = await api.update_device(device_friendly_id, update_data)
-                    if result:
-                        _LOGGER.info("Successfully updated device %s with direct image data (method %d)", device_friendly_id, i + 1)
-                        success = True
-                        break
-                    else:
-                        _LOGGER.warning("Direct device update method %d returned False", i + 1)
-                except Exception as direct_error:
-                    _LOGGER.warning("Direct device update method %d failed: %s", i + 1, direct_error)
-                    continue
-            
-            if not success:
-                raise ServiceValidationError(f"All direct device update methods failed for dashboard {dashboard_path}")
-            
-            # Try to trigger a device refresh to make the image display
-            try:
-                _LOGGER.info("Triggering device refresh to display new image...")
-                refresh_result = await api.refresh_device(device_friendly_id)
-                if refresh_result:
-                    _LOGGER.info("Device refresh successful - image should be displayed now")
+                })
+                if result:
+                    _LOGGER.info("Updated device label to indicate dashboard: %s", dashboard_path)
+                    _LOGGER.info("Note: This server does not support dynamic screen creation")
+                    _LOGGER.info("To display dashboard content, manually create screens in TRMNL web interface")
                 else:
-                    _LOGGER.warning("Device refresh failed, but image may still appear on next polling cycle")
-            except Exception as refresh_error:
-                _LOGGER.warning("Device refresh failed: %s", refresh_error)
-                _LOGGER.info("Image may appear on device's next natural polling cycle")
+                    _LOGGER.error("Failed to update device label")
+                    
+            except Exception as update_error:
+                _LOGGER.error("Failed to update device: %s", update_error)
+                raise ServiceValidationError(f"Failed to update device {device_friendly_id}: {update_error}")
             
-            _LOGGER.info("Successfully sent dashboard %s to device %s via direct update", dashboard_path, device_friendly_id)
-            return  # Success - skip the screen creation code below
+            # Don't run the screen creation code below - we know it doesn't work
+            _LOGGER.info("Dashboard capture service completed (label update only)")
+            return
             
             # This code should not execute now, but keep it as fallback
             screen_result = await api.create_screen(screen_data)
