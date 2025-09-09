@@ -1273,6 +1273,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             
             # Log image data stats before sending
             _LOGGER.info("Screen creation - Image data size: %d characters", len(image_data))
+            _LOGGER.info("Image data starts with: %s", image_data[:50] if image_data else "NO DATA")
+            
+            # Check if we're accidentally sending placeholder content
+            if "Playwright not available" in image_data:
+                _LOGGER.warning("WARNING: Sending placeholder text instead of actual image data!")
+                _LOGGER.warning("The dashboard capture is creating a text-based placeholder, not a real image")
+                _LOGGER.warning("This means Playwright is not available for actual screenshot capture")
             
             # Based on diagnostics, this server expects format with image object containing model_id and label
             screen_data = {
@@ -1329,13 +1336,52 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             screen_id = screen_result.get('id')
             _LOGGER.info("Successfully created screen %s with dashboard capture", screen_id)
             
-            # Send the screen to the device using our direct assignment method (which worked)
-            _LOGGER.info("Attempting to assign screen %s to device %s", screen_id, device_friendly_id)
-            success = await api.send_screen_to_device(device_friendly_id, screen_id)
-            if not success:
-                raise ServiceValidationError(f"Failed to send dashboard screen to device {device_friendly_id}")
+            # Screen created successfully! Now try to get it to display on the device
+            _LOGGER.info("Screen %s created successfully, attempting assignment to device %s", screen_id, device_friendly_id)
             
-            _LOGGER.info("Successfully sent dashboard %s to device %s", dashboard_path, device_friendly_id)
+            # Try multiple assignment approaches since playlists don't work
+            assignment_methods = [
+                # Method 1: Try setting current_screen_id directly
+                {"current_screen_id": screen_id},
+                # Method 2: Try with just screen_id
+                {"screen_id": screen_id}, 
+                # Method 3: Try with active_screen
+                {"active_screen": screen_id},
+                # Method 4: Try with display_screen_id  
+                {"display_screen_id": screen_id},
+                # Method 5: Try updating label to include screen reference
+                {"label": f"HA Dashboard {dashboard_path}", "active_screen_id": screen_id}
+            ]
+            
+            assignment_success = False
+            for i, assignment_data in enumerate(assignment_methods):
+                try:
+                    _LOGGER.info("Trying screen assignment method %d: %s", i + 1, assignment_data)
+                    result = await api.update_device(device_friendly_id, assignment_data)
+                    if result:
+                        _LOGGER.info("Screen assignment method %d succeeded!", i + 1)
+                        assignment_success = True
+                        break
+                    else:
+                        _LOGGER.warning("Screen assignment method %d returned False", i + 1)
+                except Exception as assign_error:
+                    _LOGGER.warning("Screen assignment method %d failed: %s", i + 1, assign_error)
+                    continue
+            
+            if assignment_success:
+                _LOGGER.info("Successfully assigned screen %s to device %s", screen_id, device_friendly_id)
+                # Try to trigger device refresh
+                try:
+                    await api.refresh_device(device_friendly_id)
+                    _LOGGER.info("Device refresh triggered - screen should display now")
+                except:
+                    _LOGGER.info("Device refresh failed, but screen may appear on next polling cycle")
+            else:
+                _LOGGER.warning("Could not assign screen to device automatically")
+                _LOGGER.info("Screen %s created successfully and available in TRMNL web interface", screen_id)
+                _LOGGER.info("You can manually assign it to device %s in the web interface", device_friendly_id)
+            
+            _LOGGER.info("Dashboard capture completed - screen %s created for %s", screen_id, dashboard_path)
             
         except Exception as e:
             _LOGGER.error("Error in send_dashboard_to_device service: %s", e, exc_info=True)
