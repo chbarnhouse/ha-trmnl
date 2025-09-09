@@ -1292,31 +1292,55 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             _LOGGER.info("Attempting direct device update with image data (bypassing screens API)")
             
             direct_update_attempts = [
-                # Attempt 1: Try with image_data field
+                # Attempt 1: Try with image_data field + force refresh
                 {
                     "image_data": image_data,
                     "screen_name": unique_name,
-                    "screen_label": f"HA Dashboard {dashboard_path}"
+                    "screen_label": f"HA Dashboard {dashboard_path}",
+                    "label": f"HA Dashboard {dashboard_path}",
+                    "refresh": True,
+                    "force_update": True
                 },
-                # Attempt 2: Try with image_url field (data URL)
+                # Attempt 2: Try with image_url field (data URL) + refresh trigger
                 {
                     "image_url": f"data:image/png;base64,{image_data}",
                     "screen_name": unique_name,
-                    "screen_label": f"HA Dashboard {dashboard_path}"
+                    "screen_label": f"HA Dashboard {dashboard_path}",
+                    "label": f"HA Dashboard {dashboard_path}",
+                    "force_refresh": True
                 },
-                # Attempt 3: Try with current_image field
+                # Attempt 3: Try with current_image field + display trigger
                 {
                     "current_image": image_data,
                     "name": unique_name,
-                    "label": f"HA Dashboard {dashboard_path}"
+                    "label": f"HA Dashboard {dashboard_path}",
+                    "display_now": True,
+                    "show_image": True
                 },
-                # Attempt 4: Try with display_content field
+                # Attempt 4: Try with display_content field + immediate display
                 {
                     "display_content": {
                         "image_data": image_data,
-                        "type": "image"
+                        "type": "image",
+                        "format": "png"
                     },
-                    "name": unique_name
+                    "name": unique_name,
+                    "label": f"HA Dashboard {dashboard_path}",
+                    "immediate_display": True
+                },
+                # Attempt 5: Try setting current screen ID directly
+                {
+                    "current_screen_data": image_data,
+                    "current_screen_name": unique_name,
+                    "label": f"HA Dashboard {dashboard_path}",
+                    "update_display": True
+                },
+                # Attempt 6: Try with content field (like web API)
+                {
+                    "content": image_data,
+                    "content_type": "image/png",
+                    "name": unique_name,
+                    "label": f"HA Dashboard {dashboard_path}"
                 }
             ]
             
@@ -1337,6 +1361,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             
             if not success:
                 raise ServiceValidationError(f"All direct device update methods failed for dashboard {dashboard_path}")
+            
+            # Try to trigger a device refresh to make the image display
+            try:
+                _LOGGER.info("Triggering device refresh to display new image...")
+                refresh_result = await api.refresh_device(device_friendly_id)
+                if refresh_result:
+                    _LOGGER.info("Device refresh successful - image should be displayed now")
+                else:
+                    _LOGGER.warning("Device refresh failed, but image may still appear on next polling cycle")
+            except Exception as refresh_error:
+                _LOGGER.warning("Device refresh failed: %s", refresh_error)
+                _LOGGER.info("Image may appear on device's next natural polling cycle")
             
             _LOGGER.info("Successfully sent dashboard %s to device %s via direct update", dashboard_path, device_friendly_id)
             return  # Success - skip the screen creation code below
