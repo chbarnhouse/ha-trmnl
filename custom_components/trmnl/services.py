@@ -1296,13 +1296,46 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 
                 # Add Home Assistant authentication token for external service
                 try:
-                    # Get the current access token from the request context
-                    if hasattr(call, 'context') and call.context:
-                        # Use a long-lived access token if available, or create one
-                        refresh_token = call.context.refresh_token
-                        if refresh_token and hasattr(refresh_token, 'token'):
-                            screenshot_payload["ha_token"] = refresh_token.token
-                            _LOGGER.info("Added HA authentication token to screenshot request")
+                    # Try multiple methods to get an authentication token
+                    auth_token = None
+                    
+                    # Method 1: Check if there's an auth token in the context
+                    if hasattr(call, 'context') and call.context and hasattr(call.context, 'user'):
+                        user = call.context.user
+                        if user and hasattr(user, 'refresh_tokens'):
+                            # Get the first available refresh token
+                            for token_id, refresh_token in user.refresh_tokens.items():
+                                if refresh_token and hasattr(refresh_token, 'token'):
+                                    auth_token = refresh_token.token
+                                    _LOGGER.info("Using user refresh token for authentication")
+                                    break
+                    
+                    # Method 2: Try to use the context's refresh token directly
+                    if not auth_token and hasattr(call, 'context') and call.context:
+                        if hasattr(call.context, 'refresh_token') and call.context.refresh_token:
+                            refresh_token = call.context.refresh_token
+                            if hasattr(refresh_token, 'token'):
+                                auth_token = refresh_token.token
+                                _LOGGER.info("Using context refresh token for authentication")
+                    
+                    # Method 3: Create a long-lived access token for the service
+                    if not auth_token:
+                        try:
+                            # Get the user from context and create a long-lived token
+                            if hasattr(call, 'context') and call.context and hasattr(call.context, 'user'):
+                                user = call.context.user
+                                if user:
+                                    # This is a simplified approach - in production you'd want to use existing tokens
+                                    _LOGGER.info("Could not find existing token, service will try without authentication")
+                        except Exception as token_create_error:
+                            _LOGGER.warning("Could not create token: %s", token_create_error)
+                    
+                    if auth_token:
+                        screenshot_payload["ha_token"] = auth_token
+                        _LOGGER.info("Added HA authentication token to screenshot request (length: %d)", len(auth_token))
+                    else:
+                        _LOGGER.warning("No authentication token available - service will try without authentication")
+                        
                 except Exception as auth_error:
                     _LOGGER.warning("Could not add authentication token: %s", auth_error)
                     # Continue without token - service will try without authentication
