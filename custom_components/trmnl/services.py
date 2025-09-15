@@ -1299,42 +1299,58 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     # Try multiple methods to get an authentication token
                     auth_token = None
                     
-                    # Method 1: Check if there's an auth token in the context
-                    if hasattr(call, 'context') and call.context and hasattr(call.context, 'user'):
-                        user = call.context.user
-                        if user and hasattr(user, 'refresh_tokens'):
-                            # Get the first available refresh token
-                            for token_id, refresh_token in user.refresh_tokens.items():
-                                if refresh_token and hasattr(refresh_token, 'token'):
-                                    auth_token = refresh_token.token
-                                    _LOGGER.info("Using user refresh token for authentication")
-                                    break
+                    # Method 1: Try to get access token from the current context
+                    if hasattr(call, 'context') and call.context:
+                        # Check if there's an access token in the context
+                        if hasattr(call.context, 'access_token') and call.context.access_token:
+                            auth_token = call.context.access_token
+                            _LOGGER.info("Using context access token for authentication")
+                        # Check for refresh token with access token
+                        elif hasattr(call.context, 'refresh_token') and call.context.refresh_token:
+                            refresh_token = call.context.refresh_token
+                            if hasattr(refresh_token, 'access_token'):
+                                auth_token = refresh_token.access_token
+                                _LOGGER.info("Using refresh token's access token for authentication")
                     
-                    # Method 2: Try to use the context's refresh token directly
+                    # Method 2: Try to get token from auth manager
+                    if not auth_token:
+                        try:
+                            # Get the auth manager and try to create an access token
+                            auth_manager = hass.auth
+                            if hasattr(call, 'context') and call.context and hasattr(call.context, 'user'):
+                                user = call.context.user
+                                if user and auth_manager:
+                                    # Try to get an existing access token or create one
+                                    # Look through existing refresh tokens for access tokens
+                                    if hasattr(user, 'refresh_tokens'):
+                                        for token_id, refresh_token in user.refresh_tokens.items():
+                                            if hasattr(refresh_token, 'access_token') and refresh_token.access_token:
+                                                auth_token = refresh_token.access_token
+                                                _LOGGER.info("Found access token from user's refresh tokens")
+                                                break
+                        except Exception as auth_mgr_error:
+                            _LOGGER.debug("Auth manager approach failed: %s", auth_mgr_error)
+                    
+                    # Method 3: Generate a temporary access token if we have a refresh token
                     if not auth_token and hasattr(call, 'context') and call.context:
                         if hasattr(call.context, 'refresh_token') and call.context.refresh_token:
                             refresh_token = call.context.refresh_token
-                            if hasattr(refresh_token, 'token'):
-                                auth_token = refresh_token.token
-                                _LOGGER.info("Using context refresh token for authentication")
-                    
-                    # Method 3: Create a long-lived access token for the service
-                    if not auth_token:
-                        try:
-                            # Get the user from context and create a long-lived token
-                            if hasattr(call, 'context') and call.context and hasattr(call.context, 'user'):
-                                user = call.context.user
-                                if user:
-                                    # This is a simplified approach - in production you'd want to use existing tokens
-                                    _LOGGER.info("Could not find existing token, service will try without authentication")
-                        except Exception as token_create_error:
-                            _LOGGER.warning("Could not create token: %s", token_create_error)
+                            try:
+                                # Try to generate an access token from the refresh token
+                                auth_manager = hass.auth
+                                if auth_manager and hasattr(auth_manager, 'async_create_access_token'):
+                                    access_token = await auth_manager.async_create_access_token(refresh_token)
+                                    if access_token:
+                                        auth_token = access_token.token
+                                        _LOGGER.info("Generated new access token for authentication")
+                            except Exception as token_gen_error:
+                                _LOGGER.debug("Token generation failed: %s", token_gen_error)
                     
                     if auth_token:
                         screenshot_payload["ha_token"] = auth_token
                         _LOGGER.info("Added HA authentication token to screenshot request (length: %d)", len(auth_token))
                     else:
-                        _LOGGER.warning("No authentication token available - service will try without authentication")
+                        _LOGGER.warning("No authentication token available - external service will try without authentication")
                         
                 except Exception as auth_error:
                     _LOGGER.warning("Could not add authentication token: %s", auth_error)
