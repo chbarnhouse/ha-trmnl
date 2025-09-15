@@ -1246,10 +1246,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 dashboard_path, device_friendly_id, screenshot_service_url
             )
             
-            # Get Home Assistant base URL
+            # Get Home Assistant base URL - ensure it's accessible from external services
             ha_base_url = hass.config.external_url or hass.config.internal_url
             if not ha_base_url:
-                ha_base_url = f"http://localhost:8123"
+                # Try to determine the actual host IP instead of localhost
+                import socket
+                try:
+                    # Get the local IP address that would be used to reach external services
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.connect(("8.8.8.8", 80))  # Connect to a public DNS server
+                    local_ip = s.getsockname()[0]
+                    s.close()
+                    ha_base_url = f"http://{local_ip}:8123"
+                    _LOGGER.info("Auto-detected HA base URL: %s", ha_base_url)
+                except Exception as e:
+                    _LOGGER.warning("Could not auto-detect IP, using localhost: %s", e)
+                    ha_base_url = f"http://localhost:8123"
             
             # Construct full dashboard URL
             dashboard_url = f"{ha_base_url}{dashboard_path}"
@@ -1259,7 +1271,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 separator = "&" if "?" in dashboard_url else "?"
                 dashboard_url += f"{separator}theme={theme}"
             
-            _LOGGER.info("Dashboard URL: %s", dashboard_url)
+            _LOGGER.info("Constructed dashboard URL for external service: %s", dashboard_url)
+            _LOGGER.info("HA instance base URL: %s", ha_base_url)
             
             # Try external screenshot service first
             image_data = None
