@@ -1281,6 +1281,19 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     "rotation": rotation_angle
                 }
                 
+                # Add Home Assistant authentication token for external service
+                try:
+                    # Get the current access token from the request context
+                    if hasattr(call, 'context') and call.context:
+                        # Use a long-lived access token if available, or create one
+                        refresh_token = call.context.refresh_token
+                        if refresh_token and hasattr(refresh_token, 'token'):
+                            screenshot_payload["ha_token"] = refresh_token.token
+                            _LOGGER.info("Added HA authentication token to screenshot request")
+                except Exception as auth_error:
+                    _LOGGER.warning("Could not add authentication token: %s", auth_error)
+                    # Continue without token - service will try without authentication
+                
                 async with aiohttp.ClientSession() as session:
                     screenshot_endpoint = f"{screenshot_service_url.rstrip('/')}/screenshot"
                     _LOGGER.info("Calling external screenshot service: %s", screenshot_endpoint)
