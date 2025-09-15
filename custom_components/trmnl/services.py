@@ -585,12 +585,14 @@ CONFIGURE_PLAYLISTS_SCHEMA = vol.Schema({
 SEND_DASHBOARD_SCHEMA = vol.Schema({
     vol.Required("device_id"): cv.string,
     vol.Required("dashboard_path"): cv.string,
+    vol.Optional("screenshot_service_url", default="http://localhost:3001"): cv.string,
     vol.Optional("theme"): cv.string,
     vol.Optional("screen_name"): cv.string,
     vol.Optional("action"): vol.In(["create_screen", "update_screen", "add_to_playlist"]),
     vol.Optional("playlist_id"): cv.string,
     vol.Optional("width", default=800): vol.Coerce(int),
     vol.Optional("height", default=480): vol.Coerce(int),
+    vol.Optional("wait_time", default=2000): vol.Coerce(int),
     vol.Optional("orientation", default="landscape"): vol.In(["landscape", "portrait", "landscape_inverted", "portrait_inverted"]),
     vol.Optional("center_x_offset", default=0): vol.Coerce(int),
     vol.Optional("center_y_offset", default=0): vol.Coerce(int),
@@ -1220,15 +1222,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_send_dashboard_to_device(call: ServiceCall) -> None:
         """Capture a Home Assistant dashboard and send it to a TRMNL device."""
         try:
-            
             api = get_api_instance()
             device_friendly_id = get_device_friendly_id(call.data["device_id"])
             dashboard_path = call.data["dashboard_path"]
+            screenshot_service_url = call.data.get("screenshot_service_url", "http://localhost:3001")
             
             # Get optional parameters with defaults
             theme = call.data.get("theme")
             width = call.data.get("width", 800)
             height = call.data.get("height", 480)
+            wait_time = call.data.get("wait_time", 2000)
             orientation = call.data.get("orientation", "landscape")
             center_x_offset = call.data.get("center_x_offset", 0)
             center_y_offset = call.data.get("center_y_offset", 0)
@@ -1239,69 +1242,107 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             rotation_angle = call.data.get("rotation_angle", 0.0)
             
             _LOGGER.info(
-                "Capturing dashboard %s for device %s with theme=%s, size=%dx%d, orientation=%s",
-                dashboard_path, device_friendly_id, theme, width, height, orientation
+                "Capturing dashboard %s for device %s with external service %s",
+                dashboard_path, device_friendly_id, screenshot_service_url
             )
             
-            # Initialize dashboard capture
-            dashboard_capture = DashboardCapture(hass)
+            # Get Home Assistant base URL
+            ha_base_url = hass.config.external_url or hass.config.internal_url
+            if not ha_base_url:
+                ha_base_url = f"http://localhost:8123"
             
-            # Capture the dashboard with appropriate method
+            # Construct full dashboard URL
+            dashboard_url = f"{ha_base_url}{dashboard_path}"
+            
+            # Add theme parameter if specified
+            if theme:
+                separator = "&" if "?" in dashboard_url else "?"
+                dashboard_url += f"{separator}theme={theme}"
+            
+            _LOGGER.info("Dashboard URL: %s", dashboard_url)
+            
+            # Try external screenshot service first
+            image_data = None
             try:
-                image_data = await dashboard_capture.capture_dashboard(
-                    dashboard_path=dashboard_path,
-                    theme=theme,
-                    width=width,
-                    height=height,
-                    orientation=orientation,
-                    center_x_offset=center_x_offset,
-                    center_y_offset=center_y_offset,
-                    margin_top=margin_top,
-                    margin_bottom=margin_bottom,
-                    margin_left=margin_left,
-                    margin_right=margin_right,
-                    rotation_angle=rotation_angle
-                )
-            except Exception as capture_error:
-                _LOGGER.error("Failed to initialize dashboard capture: %s", capture_error)
-                raise ServiceValidationError("Failed to initialize browser for dashboard capture")
+                # Call external screenshot service
+                screenshot_payload = {
+                    "url": dashboard_url,
+                    "width": width,
+                    "height": height,
+                    "theme": theme,
+                    "waitTime": wait_time,
+                    "orientation": orientation,
+                    "centerX": center_x_offset,
+                    "centerY": center_y_offset,
+                    "marginTop": margin_top,
+                    "marginBottom": margin_bottom,
+                    "marginLeft": margin_left,
+                    "marginRight": margin_right,
+                    "rotation": rotation_angle
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    screenshot_endpoint = f"{screenshot_service_url.rstrip('/')}/screenshot"
+                    _LOGGER.info("Calling external screenshot service: %s", screenshot_endpoint)
+                    
+                    try:
+                        async with session.post(
+                            screenshot_endpoint, 
+                            json=screenshot_payload,
+                            timeout=aiohttp.ClientTimeout(total=60)
+                        ) as response:
+                            if response.status == 200:
+                                result = await response.json()
+                                if result.get('success'):
+                                    image_data = result['image']
+                                    _LOGGER.info("External screenshot captured successfully: %d characters", len(image_data))
+                                else:
+                                    raise Exception(f"Screenshot service failed: {result.get('message', 'Unknown error')}")
+                            else:
+                                error_text = await response.text()
+                                raise Exception(f"Screenshot service returned {response.status}: {error_text}")
+                                
+                    except aiohttp.ClientError as e:
+                        _LOGGER.error("Failed to connect to external screenshot service at %s: %s", screenshot_endpoint, e)
+                        raise Exception(f"Cannot connect to screenshot service at {screenshot_service_url}")
+                        
+            except Exception as external_error:
+                _LOGGER.warning("External screenshot service failed: %s", external_error)
+                _LOGGER.info("Falling back to local dashboard capture")
+                
+                # Fallback to local dashboard capture
+                dashboard_capture = DashboardCapture(hass)
+                try:
+                    image_data = await dashboard_capture.capture_dashboard(
+                        dashboard_path=dashboard_path,
+                        theme=theme,
+                        width=width,
+                        height=height,
+                        orientation=orientation,
+                        center_x_offset=center_x_offset,
+                        center_y_offset=center_y_offset,
+                        margin_top=margin_top,
+                        margin_bottom=margin_bottom,
+                        margin_left=margin_left,
+                        margin_right=margin_right,
+                        rotation_angle=rotation_angle
+                    )
+                    _LOGGER.info("Local dashboard capture successful")
+                except Exception as local_error:
+                    _LOGGER.error("Both external and local capture failed. External: %s, Local: %s", external_error, local_error)
+                    raise ServiceValidationError(f"Screenshot capture failed. External service: {external_error}. Local fallback: {local_error}")
             
-            # Create a screen with the captured image (sanitize path for filename)
+            if not image_data:
+                raise ServiceValidationError("No image data captured from any method")
+            
+            # Create a screen with the captured image
             safe_path = dashboard_path.replace("/", "_").replace("\\", "_")
             timestamp = int(datetime.now().timestamp())
             unique_name = f"Dashboard_{safe_path}_{timestamp}"
             
-            # Log image data stats before sending
-            _LOGGER.info("Screen creation - Image data size: %d characters", len(image_data))
-            _LOGGER.info("Image data starts with: %s", image_data[:50] if image_data else "NO DATA")
+            _LOGGER.info("Creating TRMNL screen with captured image data (%d characters)", len(image_data))
             
-            # Check if we're accidentally sending placeholder content
-            if "Playwright not available" in image_data:
-                _LOGGER.warning("WARNING: Sending placeholder text instead of actual image data!")
-                _LOGGER.warning("The dashboard capture is creating a text-based placeholder, not a real image")
-                _LOGGER.warning("This means Playwright is not available for actual screenshot capture")
-            
-            # Based on diagnostics, this server expects format with image object containing model_id and label
-            screen_data = {
-                "model_id": 1,
-                "name": unique_name,
-                "label": f"HA Dashboard {dashboard_path}",
-                "image": {
-                    "model_id": 1,
-                    "name": unique_name,
-                    "label": f"HA Dashboard {dashboard_path}",
-                    "data": image_data
-                }
-            }
-            
-            # Based on user feedback, some screens WERE created in earlier attempts!
-            # This means the /api/screens endpoint DOES work, but our format was causing 500 errors
-            # Let's go back to the screens API with a simpler, cleaner format
-            
-            _LOGGER.info("Returning to screens API approach - user reports some screens were created earlier")
-            _LOGGER.info("Attempting screen creation with minimal, clean format")
-            
-            # Try a very simple screen format (like what worked in earlier versions)
+            # Try simple format first
             simple_screen_data = {
                 "name": unique_name,
                 "label": f"HA Dashboard {dashboard_path}",
@@ -1310,7 +1351,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 }
             }
             
-            _LOGGER.info("Attempting screen creation with minimal format")
             screen_result = await api.create_screen(simple_screen_data)
             
             if not screen_result:
@@ -1334,55 +1374,42 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 raise ServiceValidationError(f"Failed to create screen for dashboard {dashboard_path}")
             
             screen_id = screen_result.get('id')
-            _LOGGER.info("Successfully created screen %s with dashboard capture", screen_id)
+            _LOGGER.info("Successfully created screen %s with external screenshot", screen_id)
             
-            # Screen created successfully! Now try to get it to display on the device
-            _LOGGER.info("Screen %s created successfully, attempting assignment to device %s", screen_id, device_friendly_id)
-            
-            # Try multiple assignment approaches since playlists don't work
+            # Try to assign screen to device
             assignment_methods = [
-                # Method 1: Try setting current_screen_id directly
                 {"current_screen_id": screen_id},
-                # Method 2: Try with just screen_id
                 {"screen_id": screen_id}, 
-                # Method 3: Try with active_screen
                 {"active_screen": screen_id},
-                # Method 4: Try with display_screen_id  
                 {"display_screen_id": screen_id},
-                # Method 5: Try updating label to include screen reference
                 {"label": f"HA Dashboard {dashboard_path}", "active_screen_id": screen_id}
             ]
             
             assignment_success = False
             for i, assignment_data in enumerate(assignment_methods):
                 try:
-                    _LOGGER.info("Trying screen assignment method %d: %s", i + 1, assignment_data)
+                    _LOGGER.info("Trying screen assignment method %d", i + 1)
                     result = await api.update_device(device_friendly_id, assignment_data)
                     if result:
                         _LOGGER.info("Screen assignment method %d succeeded!", i + 1)
                         assignment_success = True
                         break
-                    else:
-                        _LOGGER.warning("Screen assignment method %d returned False", i + 1)
                 except Exception as assign_error:
                     _LOGGER.warning("Screen assignment method %d failed: %s", i + 1, assign_error)
                     continue
             
             if assignment_success:
                 _LOGGER.info("Successfully assigned screen %s to device %s", screen_id, device_friendly_id)
-                # Try to trigger device refresh
-                try:
-                    await api.refresh_device(device_friendly_id)
-                    _LOGGER.info("Device refresh triggered - screen should display now")
-                except:
-                    _LOGGER.info("Device refresh failed, but screen may appear on next polling cycle")
+                _LOGGER.info("Dashboard should now appear on TRMNL device!")
             else:
                 _LOGGER.warning("Could not assign screen to device automatically")
                 _LOGGER.info("Screen %s created successfully and available in TRMNL web interface", screen_id)
-                _LOGGER.info("You can manually assign it to device %s in the web interface", device_friendly_id)
+                _LOGGER.info("You can manually assign it to device %s", device_friendly_id)
             
-            _LOGGER.info("Dashboard capture completed - screen %s created for %s", screen_id, dashboard_path)
+            _LOGGER.info("Dashboard capture completed - screen %s created", screen_id)
             
+        except ServiceValidationError:
+            raise
         except Exception as e:
             _LOGGER.error("Error in send_dashboard_to_device service: %s", e, exc_info=True)
             raise ServiceValidationError(f"Failed to send dashboard to device: {e}")
