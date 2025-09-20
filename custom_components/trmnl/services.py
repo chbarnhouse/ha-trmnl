@@ -1298,32 +1298,46 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 try:
                     auth_token = None
                     
-                    # Simple and reliable approach: Generate access token from refresh token
-                    if hasattr(call, 'context') and call.context and hasattr(call.context, 'refresh_token'):
-                        refresh_token = call.context.refresh_token
-                        _LOGGER.debug("🔍 Service call has refresh token: %s", type(refresh_token))
-                        
-                        if refresh_token:
-                            try:
-                                # Generate a temporary access token for this request
-                                auth_manager = hass.auth
-                                if auth_manager:
-                                    access_token = await auth_manager.async_create_access_token(refresh_token, "TRMNL Screenshot Service")
-                                    if access_token and hasattr(access_token, 'token'):
-                                        auth_token = access_token.token
-                                        _LOGGER.info("✅ Generated access token for screenshot service (length: %d)", len(auth_token))
+                    # Check if we have a stored long-lived access token first
+                    token_storage_key = "trmnl_screenshot_token"
+                    if hasattr(hass.data, 'get') and token_storage_key in hass.data:
+                        stored_token = hass.data[token_storage_key]
+                        if stored_token:
+                            auth_token = stored_token
+                            _LOGGER.debug("🔍 Using stored long-lived token")
+                    
+                    # If no stored token, try to create one
+                    if not auth_token:
+                        try:
+                            # Get or create a service account user for screenshot service
+                            auth_manager = hass.auth
+                            if auth_manager:
+                                # Try to find existing TRMNL service user or create access token for current user
+                                if hasattr(call, 'context') and call.context and hasattr(call.context, 'user'):
+                                    user = call.context.user
+                                    if user:
+                                        # Create a long-lived access token for this user
+                                        access_token = await auth_manager.async_create_access_token(
+                                            await auth_manager.async_get_or_create_refresh_token(user, "trmnl_screenshot"),
+                                            "TRMNL Screenshot Service"
+                                        )
+                                        if access_token and hasattr(access_token, 'token'):
+                                            auth_token = access_token.token
+                                            # Store the token for future use
+                                            if not hasattr(hass.data, 'get'):
+                                                hass.data = {}
+                                            hass.data[token_storage_key] = auth_token
+                                            _LOGGER.info("✅ Created and stored long-lived access token (length: %d)", len(auth_token))
+                                        else:
+                                            _LOGGER.warning("❌ Failed to create access token")
                                     else:
-                                        _LOGGER.warning("❌ Failed to generate access token - no token property")
+                                        _LOGGER.warning("❌ No user in service call context")
                                 else:
-                                    _LOGGER.warning("❌ No auth manager available")
-                            except Exception as token_error:
-                                _LOGGER.warning("❌ Error generating access token: %s", token_error, exc_info=True)
-                        else:
-                            _LOGGER.warning("❌ Refresh token is None")
-                    else:
-                        _LOGGER.warning("❌ No refresh token found in service call context")
-                        if hasattr(call, 'context'):
-                            _LOGGER.debug("🔍 Context attributes: %s", dir(call.context))
+                                    _LOGGER.warning("❌ No service call context available")
+                            else:
+                                _LOGGER.warning("❌ No auth manager available")
+                        except Exception as token_error:
+                            _LOGGER.warning("❌ Error creating access token: %s", token_error, exc_info=True)
                     
                     if auth_token:
                         screenshot_payload["ha_token"] = auth_token
