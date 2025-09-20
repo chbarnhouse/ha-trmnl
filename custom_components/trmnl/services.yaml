@@ -953,3 +953,10 @@ send_dashboard_to_device:
           max: 10000
           unit_of_measurement: "ms"
           mode: box
+    ha_access_token:
+      name: Home Assistant Access Token
+      description: Long-lived access token for Home Assistant API access (optional - create one in Profile > Long-lived access tokens)
+      required: false
+      selector:
+        text:
+      example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."

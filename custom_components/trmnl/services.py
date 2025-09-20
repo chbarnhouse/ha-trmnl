@@ -602,6 +602,7 @@ SEND_DASHBOARD_SCHEMA = vol.Schema({
     vol.Optional("margin_right", default=0): vol.Coerce(int),
     vol.Optional("rotation_angle", default=0.0): vol.Coerce(float),
     vol.Optional("update_frequency"): vol.In(["manual", "hourly", "daily", "every_30min", "every_15min"]),
+    vol.Optional("ha_access_token"): cv.string,
 })
 
 # === Playlist Naming Services ===
@@ -1240,6 +1241,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             margin_left = call.data.get("margin_left", 0)
             margin_right = call.data.get("margin_right", 0)
             rotation_angle = call.data.get("rotation_angle", 0.0)
+            manual_token = call.data.get("ha_access_token")
             
             _LOGGER.info(
                 "Capturing dashboard %s for device %s with external service %s",
@@ -1298,44 +1300,45 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 try:
                     auth_token = None
                     
-                    # Check if we have a stored long-lived access token first
-                    token_storage_key = "trmnl_screenshot_token"
-                    if hasattr(hass.data, 'get') and token_storage_key in hass.data:
-                        stored_token = hass.data[token_storage_key]
-                        if stored_token:
-                            auth_token = stored_token
-                            _LOGGER.debug("🔍 Using stored long-lived token")
+                    # Priority 1: Use manually provided token if available
+                    if manual_token:
+                        auth_token = manual_token.strip()
+                        _LOGGER.info("✅ Using manually provided access token (length: %d)", len(auth_token))
                     
-                    # If no stored token, try to create one
+                    # Priority 2: Check for stored long-lived access token
+                    elif hasattr(hass.data, 'get'):
+                        token_storage_key = "trmnl_screenshot_token"
+                        if token_storage_key in hass.data:
+                            stored_token = hass.data[token_storage_key]
+                            if stored_token:
+                                auth_token = stored_token
+                                _LOGGER.debug("🔍 Using stored long-lived token")
+                    
+                    # Priority 3: Try to create one automatically
                     if not auth_token:
                         try:
-                            # Get or create a service account user for screenshot service
                             auth_manager = hass.auth
-                            if auth_manager:
-                                # Try to find existing TRMNL service user or create access token for current user
-                                if hasattr(call, 'context') and call.context and hasattr(call.context, 'user'):
-                                    user = call.context.user
-                                    if user:
-                                        # Create a long-lived access token for this user
-                                        access_token = await auth_manager.async_create_access_token(
-                                            await auth_manager.async_get_or_create_refresh_token(user, "trmnl_screenshot"),
-                                            "TRMNL Screenshot Service"
-                                        )
-                                        if access_token and hasattr(access_token, 'token'):
-                                            auth_token = access_token.token
-                                            # Store the token for future use
-                                            if not hasattr(hass.data, 'get'):
-                                                hass.data = {}
-                                            hass.data[token_storage_key] = auth_token
-                                            _LOGGER.info("✅ Created and stored long-lived access token (length: %d)", len(auth_token))
-                                        else:
-                                            _LOGGER.warning("❌ Failed to create access token")
+                            if auth_manager and hasattr(call, 'context') and call.context and hasattr(call.context, 'user'):
+                                user = call.context.user
+                                if user:
+                                    # Create a long-lived access token for this user
+                                    access_token = await auth_manager.async_create_access_token(
+                                        await auth_manager.async_get_or_create_refresh_token(user, "trmnl_screenshot"),
+                                        "TRMNL Screenshot Service"
+                                    )
+                                    if access_token and hasattr(access_token, 'token'):
+                                        auth_token = access_token.token
+                                        # Store the token for future use
+                                        if not hasattr(hass.data, 'get'):
+                                            hass.data = {}
+                                        hass.data["trmnl_screenshot_token"] = auth_token
+                                        _LOGGER.info("✅ Created and stored long-lived access token (length: %d)", len(auth_token))
                                     else:
-                                        _LOGGER.warning("❌ No user in service call context")
+                                        _LOGGER.warning("❌ Failed to create access token")
                                 else:
-                                    _LOGGER.warning("❌ No service call context available")
+                                    _LOGGER.warning("❌ No user in service call context")
                             else:
-                                _LOGGER.warning("❌ No auth manager available")
+                                _LOGGER.warning("❌ No auth manager or service context available")
                         except Exception as token_error:
                             _LOGGER.warning("❌ Error creating access token: %s", token_error, exc_info=True)
                     
