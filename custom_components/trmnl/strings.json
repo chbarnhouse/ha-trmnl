@@ -1,0 +1,119 @@
+{
+  "config": {
+    "flow_title": "TRMNL Device Management",
+    "step": {
+      "server_type": {
+        "title": "Select Server Type",
+        "description": "Choose where your TRMNL devices are hosted",
+        "data": {
+          "server_type": "Server Type"
+        },
+        "data_description": {
+          "server_type": "Cloud: TRMNL Cloud (usetrmnl.com) | BYOS: Self-hosted server"
+        }
+      },
+      "cloud_auth": {
+        "title": "Cloud Authentication",
+        "description": "Enter your TRMNL Cloud API key",
+        "data": {
+          "api_key": "API Key"
+        }
+      },
+      "byos_config": {
+        "title": "BYOS Server Configuration",
+        "description": "Configure your self-hosted TRMNL server",
+        "data": {
+          "server_url": "Server URL",
+          "auth_type": "Authentication Type"
+        }
+      },
+      "byos_auth": {
+        "title": "BYOS Authentication",
+        "description": "Enter credentials for your BYOS server",
+        "data": {
+          "api_key": "API Key",
+          "username": "Username",
+          "password": "Password"
+        }
+      },
+      "device_discovery": {
+        "title": "Device Discovery",
+        "description": "Select devices to add to Home Assistant",
+        "data": {
+          "devices": "Devices"
+        }
+      },
+      "confirm": {
+        "title": "Confirm Setup",
+        "description": "TRMNL integration will be added with {device_count} device(s)"
+      }
+    },
+    "error": {
+      "invalid_api_key": "Invalid API key",
+      "invalid_server_url": "Invalid server URL",
+      "connection_error": "Failed to connect to server",
+      "device_discovery_failed": "Failed to discover devices",
+      "already_configured": "This server is already configured"
+    },
+    "abort": {
+      "already_configured": "Server is already configured",
+      "connection_error": "Failed to connect to server"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery": {
+        "name": "Battery"
+      },
+      "last_seen": {
+        "name": "Last Seen"
+      },
+      "firmware": {
+        "name": "Firmware"
+      }
+    },
+    "binary_sensor": {
+      "connection": {
+        "name": "Connection"
+      },
+      "battery_low": {
+        "name": "Battery Low"
+      }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh"
+      }
+    }
+  },
+  "service": {
+    "update_screenshot": {
+      "name": "Update Screenshot",
+      "description": "Update screenshot on TRMNL device",
+      "fields": {
+        "device_id": {
+          "name": "Device ID",
+          "description": "ID of the TRMNL device"
+        },
+        "image_url": {
+          "name": "Image URL",
+          "description": "URL to the screenshot image"
+        },
+        "token": {
+          "name": "Token",
+          "description": "Authentication token (optional, auto-generated if omitted)"
+        }
+      }
+    },
+    "trigger_refresh": {
+      "name": "Trigger Refresh",
+      "description": "Trigger device refresh on TRMNL",
+      "fields": {
+        "device_id": {
+          "name": "Device ID",
+          "description": "ID of the TRMNL device"
+        }
+      }
+    }
+  }
+}

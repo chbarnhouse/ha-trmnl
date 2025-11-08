@@ -1,0 +1,1 @@
+"""TRMNL entities module."""

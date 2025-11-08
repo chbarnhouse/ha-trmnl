@@ -1,0 +1,16 @@
+# Base requirements
+-r requirements.txt
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+
+# Linting & Type Checking
+black>=23.10.0
+pylint>=3.0.0
+mypy>=1.6.0
+
+# Code quality
+flake8>=6.1.0
+isort>=5.12.0

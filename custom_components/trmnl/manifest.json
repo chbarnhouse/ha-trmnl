@@ -1,0 +1,16 @@
+{
+  "domain": "trmnl",
+  "name": "TRMNL",
+  "codeowners": ["@yourusername"],
+  "config_flow": true,
+  "documentation": "https://github.com/yourusername/trmnl-ha-integration/wiki",
+  "requirements": [
+    "aiohttp>=3.9.0",
+    "pydantic>=2.5.0",
+    "cryptography>=41.0.0"
+  ],
+  "version": "0.1.0",
+  "issue_tracker": "https://github.com/yourusername/trmnl-ha-integration/issues",
+  "iot_class": "cloud_polling",
+  "homeassistant": "2024.1.0"
+}
