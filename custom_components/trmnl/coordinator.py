@@ -103,21 +103,36 @@ class TRMNLCoordinator(DataUpdateCoordinator):
             UpdateFailed: If update fails
         """
         try:
+            # Ensure API client is initialized
+            if self.api_client is None:
+                _LOGGER.error("API client is not initialized in coordinator!")
+                raise UpdateFailed("API client not initialized")
+
             # Fetch all devices
             all_devices = await self.api_client.get_devices()
 
+            _LOGGER.debug("Fetched %d devices from API", len(all_devices))
+            for device in all_devices:
+                _LOGGER.debug("Device: id=%s (type: %s), name=%s", device.id, type(device.id).__name__, device.name)
+
             # Filter to only configured devices
             configured_device_ids = self.entry_data.get(CONF_DEVICES, [])
+            _LOGGER.debug("Configured device IDs: %s (type: %s)", configured_device_ids, type(configured_device_ids).__name__)
+            if configured_device_ids:
+                _LOGGER.debug("First configured ID: %s (type: %s)", configured_device_ids[0], type(configured_device_ids[0]).__name__)
+
+            # Ensure all device IDs are strings for comparison
             devices = {
                 device.id: device
                 for device in all_devices
-                if device.id in configured_device_ids
+                if str(device.id) in [str(cid) for cid in configured_device_ids]
             }
 
             if not devices:
                 _LOGGER.warning(
-                    "No configured devices found. Expected: %s",
+                    "No configured devices found. Expected: %s, Got API devices: %s",
                     configured_device_ids,
+                    [device.id for device in all_devices],
                 )
 
             # Store devices for entities to access
