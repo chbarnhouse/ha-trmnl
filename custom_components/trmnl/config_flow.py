@@ -243,7 +243,9 @@ class TRMNLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.warning("No devices discovered from %s", server_type)
                 errors["base"] = "no_devices_found"
             else:
-                device_options = {device.id: device.name for device in devices}
+                # Ensure device IDs are strings for proper validation
+                device_options = {str(device.id): device.name for device in devices}
+                _LOGGER.debug("Discovered device options: %s", device_options)
 
         except Exception as err:
             _LOGGER.error("Device discovery error: %s", err)
@@ -252,8 +254,14 @@ class TRMNLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             selected_devices = user_input.get(CONF_DEVICES, [])
 
+            # Ensure selected devices are strings
+            selected_devices = [str(d) for d in selected_devices]
+
             if not selected_devices:
                 errors[CONF_DEVICES] = "no_devices_selected"
+            elif device_options and not all(d in device_options for d in selected_devices):
+                _LOGGER.error("Invalid device selection: %s not in %s", selected_devices, device_options)
+                errors[CONF_DEVICES] = "invalid_devices"
             elif not errors:
                 # Generate random token secret (32 bytes = 256 bits)
                 token_secret = secrets.token_hex(32)
