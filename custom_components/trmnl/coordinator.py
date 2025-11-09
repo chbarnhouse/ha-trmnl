@@ -51,11 +51,17 @@ class TRMNLCoordinator(DataUpdateCoordinator):
         self.entry_data = entry_data
         self.devices: dict[str, Any] = {}
         self.plugins: dict[str, Any] = {}
+        self.api_client: CloudAPIClient | BYOSAPIClient | None = None
 
-        # Initialize API client
-        self.api_client = self._create_api_client()
+    async def async_config_entry_first_refresh(self) -> None:
+        """Perform first refresh and set up API client."""
+        # Initialize API client (deferred to async context)
+        self.api_client = await self._async_create_api_client()
 
-    def _create_api_client(self) -> CloudAPIClient | BYOSAPIClient:
+        # Now perform the first refresh
+        await super().async_config_entry_first_refresh()
+
+    async def _async_create_api_client(self) -> CloudAPIClient | BYOSAPIClient:
         """Create appropriate API client based on config.
 
         Returns:
