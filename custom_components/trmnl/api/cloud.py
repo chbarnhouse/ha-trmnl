@@ -275,6 +275,14 @@ class CloudAPIClient(BaseTRMNLAPI):
                 try:
                     # Map TRMNL API fields to TRMNLDevice model
                     # TRMNL API provides: id, name, friendly_id, mac_address, battery_voltage, percent_charged, wifi_strength, rssi
+                    # Note: status, firmware_version, and last_seen are not provided by the API
+
+                    # Infer device status based on presence of data
+                    # If API returns the device, it has recently reported data, so consider it online
+                    status_str = device_data.get("status", "online")
+                    if status_str not in ["online", "offline"]:
+                        status_str = "online"  # Default to online if device data was returned
+
                     device = TRMNLDevice(
                         id=device_data["id"],
                         name=device_data["name"],
@@ -287,7 +295,7 @@ class CloudAPIClient(BaseTRMNLAPI):
                             else None
                         ),
                         firmware_version=device_data.get("firmware_version"),
-                        status=DeviceStatus(device_data.get("status", "unknown")),
+                        status=DeviceStatus(status_str),
                         # Include API fields as attributes for reference
                         attributes={
                             "friendly_id": device_data.get("friendly_id"),

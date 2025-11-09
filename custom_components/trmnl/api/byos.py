@@ -418,6 +418,12 @@ class BYOSAPIClient(BaseTRMNLAPI):
 
         for device_data in devices_data:
             try:
+                # Infer device status based on presence of data
+                # If API returns the device, it has recently reported data, so consider it online
+                status_str = device_data.get("status", "online")
+                if status_str not in ["online", "offline"]:
+                    status_str = "online"  # Default to online if device data was returned
+
                 device = TRMNLDevice(
                     id=device_data["id"],
                     name=device_data.get("name", f"Device {device_data['id']}"),
@@ -429,7 +435,7 @@ class BYOSAPIClient(BaseTRMNLAPI):
                         else None
                     ),
                     firmware_version=device_data.get("firmware_version"),
-                    status=DeviceStatus(device_data.get("status", "unknown")),
+                    status=DeviceStatus(status_str),
                     attributes=device_data.get("attributes", {}),
                 )
                 devices.append(device)
