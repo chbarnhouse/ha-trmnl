@@ -263,18 +263,26 @@ class TRMNLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.error("Invalid device selection: %s not in %s", selected_devices, device_options)
                 errors[CONF_DEVICES] = "invalid_devices"
             elif not errors:
-                # Generate random token secret (32 bytes = 256 bits)
-                token_secret = secrets.token_hex(32)
+                try:
+                    # Generate random token secret (32 bytes = 256 bits)
+                    token_secret = secrets.token_hex(32)
 
-                return self.async_create_entry(
-                    title=f"TRMNL ({server_type.upper()})",
-                    data={
+                    entry_data = {
                         CONF_SERVER_TYPE: server_type,
                         **server_config,
                         CONF_DEVICES: selected_devices,
                         CONF_TOKEN_SECRET: token_secret,
-                    },
-                )
+                    }
+
+                    _LOGGER.debug("Creating config entry with data: %s", {k: v if k != CONF_API_KEY else "***" for k, v in entry_data.items()})
+
+                    return self.async_create_entry(
+                        title=f"TRMNL ({server_type.upper()})",
+                        data=entry_data,
+                    )
+                except Exception as err:
+                    _LOGGER.error("Error creating config entry: %s", err, exc_info=True)
+                    errors["base"] = "cannot_create_entry"
 
         if not device_options and not errors:
             errors["base"] = "no_devices_found"
