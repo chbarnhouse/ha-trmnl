@@ -40,6 +40,12 @@ class TRMNLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        super().__init__()
+        self.server_type: str | None = None
+        self.server_config: dict[str, Any] = {}
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -85,10 +91,9 @@ class TRMNLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not await api_client.validate_credentials():
                     errors[CONF_API_KEY] = "invalid_api_key"
                 else:
-                    return await self.async_step_device_discovery(
-                        server_type=SERVER_TYPE_CLOUD,
-                        server_config={CONF_API_KEY: api_key},
-                    )
+                    self.server_type = SERVER_TYPE_CLOUD
+                    self.server_config = {CONF_API_KEY: api_key}
+                    return await self.async_step_device_discovery()
 
             except InvalidAPIKeyError:
                 errors[CONF_API_KEY] = "invalid_api_key"
@@ -169,14 +174,13 @@ class TRMNLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not await api_client.validate_credentials():
                     errors["base"] = "cannot_connect"
                 else:
-                    return await self.async_step_device_discovery(
-                        server_type=SERVER_TYPE_BYOS,
-                        server_config={
-                            CONF_SERVER_URL: server_url,
-                            CONF_AUTH_TYPE: auth_type,
-                            **credentials,
-                        },
-                    )
+                    self.server_type = SERVER_TYPE_BYOS
+                    self.server_config = {
+                        CONF_SERVER_URL: server_url,
+                        CONF_AUTH_TYPE: auth_type,
+                        **credentials,
+                    }
+                    return await self.async_step_device_discovery()
 
             except Exception as err:
                 _LOGGER.error("BYOS authentication error: %s", err)
@@ -201,14 +205,15 @@ class TRMNLConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_device_discovery(
-        self,
-        server_type: str,
-        server_config: dict[str, Any],
-        user_input: dict[str, Any] | None = None,
+        self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle device discovery step."""
         errors = {}
         device_options = {}
+
+        # Use stored server_type and server_config from instance variables
+        server_type = self.server_type or SERVER_TYPE_CLOUD
+        server_config = self.server_config or {}
 
         # Discover devices from API
         try:
