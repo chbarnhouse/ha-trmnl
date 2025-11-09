@@ -267,16 +267,20 @@ class CloudAPIClient(BaseTRMNLAPI):
             DeviceDiscoveryError: If response format is invalid
         """
         try:
-            devices_data = data.get("devices", [])
+            # TRMNL API returns devices under "data" key, not "devices"
+            devices_data = data.get("data", [])
             devices = []
 
             for device_data in devices_data:
                 try:
+                    # Map TRMNL API fields to TRMNLDevice model
+                    # TRMNL API provides: id, name, friendly_id, mac_address, battery_voltage, percent_charged, wifi_strength, rssi
                     device = TRMNLDevice(
                         id=device_data["id"],
                         name=device_data["name"],
                         device_type=DeviceType(device_data.get("device_type", "og")),
-                        battery_level=device_data.get("battery_level"),
+                        # Use percent_charged as battery_level if battery_level not provided
+                        battery_level=device_data.get("battery_level") or device_data.get("percent_charged"),
                         last_seen=(
                             datetime.fromisoformat(device_data["last_seen"])
                             if device_data.get("last_seen")
@@ -284,7 +288,15 @@ class CloudAPIClient(BaseTRMNLAPI):
                         ),
                         firmware_version=device_data.get("firmware_version"),
                         status=DeviceStatus(device_data.get("status", "unknown")),
-                        attributes=device_data.get("attributes", {}),
+                        # Include API fields as attributes for reference
+                        attributes={
+                            "friendly_id": device_data.get("friendly_id"),
+                            "mac_address": device_data.get("mac_address"),
+                            "battery_voltage": device_data.get("battery_voltage"),
+                            "percent_charged": device_data.get("percent_charged"),
+                            "wifi_strength": device_data.get("wifi_strength"),
+                            "rssi": device_data.get("rssi"),
+                        },
                     )
                     devices.append(device)
                 except (KeyError, ValueError) as err:
